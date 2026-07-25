@@ -144,7 +144,7 @@ class ProductController extends Controller
         ]);
     }
 
-    public function print(Product $product)
+    public function print(Request $request, Product $product)
     {
         $product->load(['party:id,party_name', 'meals']);
 
@@ -174,9 +174,19 @@ class ProductController extends Controller
             'date' => Carbon::now()->format('d/m/Y'),
         ];
 
-        $pdf = Pdf::loadView('pdf.po', $data);
-        $pdf->setPaper('a4');
+        if ($request->query('download') === '1') {
+            $pdf = Pdf::loadView('pdf.po', $data);
+            $pdf->setPaper('a4');
 
-        return $pdf->stream('po-'.$product->code.'.pdf');
+            return $pdf->download('po-'.$product->code.'.pdf');
+        }
+
+        $content = view('pdf.po', $data)->render();
+
+        return view('pdf.print-layout', [
+            'title' => 'Purchase Order '.$product->code,
+            'content' => $content,
+            'downloadUrl' => url()->current().'?download=1',
+        ]);
     }
 }

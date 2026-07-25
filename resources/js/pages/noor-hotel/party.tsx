@@ -21,7 +21,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Printer, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 type Party = {
@@ -170,6 +170,10 @@ export default function Party({ parties }: { parties: Party[] }) {
     const openDelete = (party: Party) => {
         setDeletingParty(party);
         setDeleteOpen(true);
+    };
+
+    const printParty = (party: Party) => {
+        window.open(`/api/party/${party.id}/print`, '_blank');
     };
 
     const PartyFormFields = ({ prefix, party }: { prefix?: string; party?: Party }) => (
@@ -379,6 +383,9 @@ export default function Party({ parties }: { parties: Party[] }) {
                                         <td className="px-4 py-3">{party.end_date}</td>
                                         <td className="px-4 py-3 text-right">
                                             <div className="flex items-center justify-end gap-2">
+                                                <Button variant="ghost" size="icon" onClick={() => printParty(party)}>
+                                                    <Printer className="size-4" />
+                                                </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => openEdit(party)}>
                                                     <Pencil className="size-4" />
                                                 </Button>

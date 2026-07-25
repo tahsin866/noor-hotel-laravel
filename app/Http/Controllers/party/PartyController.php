@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\party\StorePartyRequest;
 use App\Http\Requests\party\UpdatePartyRequest;
 use App\Models\Party;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -59,6 +61,27 @@ class PartyController extends Controller
 
         return response()->json([
             'message' => 'Party deleted successfully.',
+        ]);
+    }
+
+    /**
+     * Print party as PDF.
+     */
+    public function print(Request $request, Party $party)
+    {
+        if ($request->query('download') === '1') {
+            $pdf = Pdf::loadView('pdf.party', ['party' => $party]);
+            $pdf->setPaper('a4');
+
+            return $pdf->download('party-'.$party->party_name.'.pdf');
+        }
+
+        $content = view('pdf.party', ['party' => $party])->render();
+
+        return view('pdf.print-layout', [
+            'title' => 'Party - '.$party->party_name,
+            'content' => $content,
+            'downloadUrl' => url()->current().'?download=1',
         ]);
     }
 }

@@ -252,7 +252,7 @@ class ChallanController extends Controller
         return response()->json(['success' => true, 'message' => 'Challan status updated']);
     }
 
-    public function print($id)
+    public function print(Request $request, $id)
     {
         $challan = Challan::with([
             'product',
@@ -280,10 +280,20 @@ class ChallanController extends Controller
             'items' => $items,
         ];
 
-        $pdf = Pdf::loadView('pdf.challan', $data);
-        $pdf->setPaper('a4');
+        if ($request->query('download') === '1') {
+            $pdf = Pdf::loadView('pdf.challan', $data);
+            $pdf->setPaper('a4');
 
-        return $pdf->stream('challan-'.$challan->challan_number.'.pdf');
+            return $pdf->download('challan-'.$challan->challan_number.'.pdf');
+        }
+
+        $content = view('pdf.challan', $data)->render();
+
+        return view('pdf.print-layout', [
+            'title' => 'Challan '.$challan->challan_number,
+            'content' => $content,
+            'downloadUrl' => url()->current().'?download=1',
+        ]);
     }
 
     public function printBatch(Request $request)
@@ -318,9 +328,21 @@ class ChallanController extends Controller
             ];
         });
 
-        $pdf = Pdf::loadView('pdf.challan_batch', ['challans' => $challansData]);
-        $pdf->setPaper('a4');
+        $data = ['challans' => $challansData];
 
-        return $pdf->stream('challans-batch.pdf');
+        if ($request->query('download') === '1') {
+            $pdf = Pdf::loadView('pdf.challan_batch', $data);
+            $pdf->setPaper('a4');
+
+            return $pdf->download('challans-batch.pdf');
+        }
+
+        $content = view('pdf.challan_batch', $data)->render();
+
+        return view('pdf.print-layout', [
+            'title' => 'Challans Batch Print',
+            'content' => $content,
+            'downloadUrl' => url()->current().'?'.http_build_query(array_merge($request->query(), ['download' => '1'])),
+        ]);
     }
 }

@@ -391,7 +391,7 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function print($id)
+    public function print(Request $request, $id)
     {
         $invoice = Invoice::with([
             'party',
@@ -461,10 +461,20 @@ class InvoiceController extends Controller
             'total_in_words' => $totalInWords,
         ];
 
-        $pdf = Pdf::loadView('pdf.invoice', $data);
-        $pdf->setPaper('a4');
+        if ($request->query('download') === '1') {
+            $pdf = Pdf::loadView('pdf.invoice', $data);
+            $pdf->setPaper('a4');
 
-        return $pdf->stream('invoice-'.$invoice->invoice_number.'.pdf');
+            return $pdf->download('invoice-'.$invoice->invoice_number.'.pdf');
+        }
+
+        $content = view('pdf.invoice', $data)->render();
+
+        return view('pdf.print-layout', [
+            'title' => 'Invoice '.$invoice->invoice_number,
+            'content' => $content,
+            'downloadUrl' => url()->current().'?download=1',
+        ]);
     }
 
     private function numberToWords(float $amount): string

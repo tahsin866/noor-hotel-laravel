@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('party', [PartyController::class, 'store']);
 Route::put('party/{party}', [PartyController::class, 'update']);
 Route::delete('party/{party}', [PartyController::class, 'destroy']);
+Route::get('party/{party}/print', [PartyController::class, 'print']);
 
 Route::get('products', [ProductController::class, 'index']);
 Route::post('products', [ProductController::class, 'store']);
