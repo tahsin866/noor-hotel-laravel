@@ -12,12 +12,14 @@ Route::delete('party/{party}', [PartyController::class, 'destroy']);
 
 Route::get('products', [ProductController::class, 'index']);
 Route::post('products', [ProductController::class, 'store']);
+Route::get('products/{product}/print', [ProductController::class, 'print']);
 Route::get('products/{product}', [ProductController::class, 'show']);
 Route::put('products/{product}', [ProductController::class, 'update']);
 Route::delete('products/{product}', [ProductController::class, 'destroy']);
 
 Route::get('challans', [ChallanController::class, 'index']);
 Route::post('challans', [ChallanController::class, 'store']);
+Route::post('challans/print-batch', [ChallanController::class, 'printBatch']);
 Route::get('challans/{id}', [ChallanController::class, 'show']);
 Route::put('challans/{id}', [ChallanController::class, 'update']);
 Route::delete('challans/{id}', [ChallanController::class, 'destroy']);

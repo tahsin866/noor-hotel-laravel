@@ -44,6 +44,13 @@ type Product = {
     party?: Party;
 };
 
+type ChallanItem = {
+    id?: number;
+    meal_type: string;
+    quantity: number;
+    description?: string;
+};
+
 type Challan = {
     id: number;
     challan_number: string;
@@ -54,11 +61,13 @@ type Challan = {
     party_name: string;
     date: string;
     status: string;
+    items?: ChallanItem[];
 };
 
 type InvoiceItem = {
     id: number;
     product_name: string;
+    meal_type?: string;
     quantity: number;
     unit_price: number;
     vat_rate: number;
@@ -74,6 +83,7 @@ type InvoiceChallan = {
     party_name: string;
     challan_date: string;
     challan_status: string;
+    items?: ChallanItem[];
 };
 
 type Invoice = {
@@ -118,6 +128,11 @@ function fmt$(n: number | string) {
 function fmtDate(d: string) {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('en-GB');
+}
+
+function fmtMealBreakdown(items?: ChallanItem[]) {
+    if (!items || items.length === 0) return '—';
+    return items.map((it) => `${it.meal_type}/${it.quantity}`).join(', ');
 }
 
 export default function Invoices({ parties, products, challans }: { parties: Party[]; products: Product[]; challans: Challan[] }) {
@@ -292,15 +307,19 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 if (d.challans && d.challans.length) {
                     chlRows = d.challans
                         .map(
-                            (c: InvoiceChallan, i: number) =>
-                                `<tr><td style="padding:6px 12px;border:1px solid #e2e8f0;">${i + 1}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;font-weight:600;">${c.challan_number}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${c.product_name || c.po_number || '-'}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${fmtDate(c.challan_date)}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;text-align:center;"><span style="padding:2px 8px;border-radius:12px;font-size:11px;background:#dbeafe;color:#1d4ed8;">${c.challan_status}</span></td></tr>`,
+                            (c: InvoiceChallan, i: number) => {
+                                const mealStr = c.items && c.items.length
+                                    ? c.items.map((it: ChallanItem) => `${it.meal_type}/${it.quantity}`).join(', ')
+                                    : '-';
+                                return `<tr><td style="padding:6px 12px;border:1px solid #e2e8f0;">${i + 1}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;font-weight:600;">${c.challan_number}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${c.product_name || c.po_number || '-'}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${mealStr}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${fmtDate(c.challan_date)}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;text-align:center;"><span style="padding:2px 8px;border-radius:12px;font-size:11px;background:#dbeafe;color:#1d4ed8;">${c.challan_status}</span></td></tr>`;
+                            },
                         )
                         .join('');
                 }
                 let itemRows = '';
                 if (d.items) {
                     d.items.forEach((it: InvoiceItem, i: number) => {
-                        itemRows += `<tr><td style="padding:8px 12px;border:1px solid #e2e8f0;">${i + 1}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">${it.product_name}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${it.quantity}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">Tk ${fmt$(it.unit_price)}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">${fmt$(it.vat_amount)}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;">Tk ${fmt$(it.total)}</td></tr>`;
+                        itemRows += `<tr><td style="padding:8px 12px;border:1px solid #e2e8f0;">${i + 1}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">${it.product_name}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">${it.meal_type || '-'}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${it.quantity}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">Tk ${fmt$(it.unit_price)}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">${fmt$(it.vat_amount)}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;">Tk ${fmt$(it.total)}</td></tr>`;
                     });
                 }
                 allHtml += `<div style="page-break-after:always;padding:20px;border-bottom:2px dashed #e2e8f0;">
@@ -310,9 +329,9 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                         <tr><td style="border:none;padding:4px 0;"><strong>Party:</strong> ${d.party_name || 'N/A'}</td><td style="border:none;padding:4px 0;"><strong>Due Date:</strong> ${fmtDate(d.due_date)}</td></tr>
                         <tr><td colspan="2" style="border:none;padding:4px 0;"><strong>Status:</strong> ${d.status}</td></tr>
                     </table>
-                    ${d.challans && d.challans.length ? `<h3 style="font-size:14px;margin:16px 0 8px;color:#475569;">Challans</h3><table style="width:100%;border-collapse:collapse;margin-bottom:16px;"><thead><tr><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;width:40px;">#</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Challan No</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Product/PO</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Date</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:center;width:100px;">Status</th></tr></thead><tbody>${chlRows}</tbody></table>` : ''}
+                    ${d.challans && d.challans.length ? `<h3 style="font-size:14px;margin:16px 0 8px;color:#475569;">Challans</h3><table style="width:100%;border-collapse:collapse;margin-bottom:16px;"><thead><tr><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;width:40px;">#</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Challan No</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Product/PO</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Items</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Date</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:center;width:100px;">Status</th></tr></thead><tbody>${chlRows}</tbody></table>` : ''}
                     <h3 style="font-size:14px;margin:16px 0 8px;color:#475569;">Items</h3>
-                    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;"><thead><tr><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;width:40px;">#</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Product</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:center;width:80px;">Qty</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">Price</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">VAT</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">Total</th></tr></thead><tbody>${itemRows}</tbody></table>
+                    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;"><thead><tr><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;width:40px;">#</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Product</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Meal</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:center;width:80px;">Qty</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">Price</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">VAT</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">Total</th></tr></thead><tbody>${itemRows}</tbody></table>
                     <div style="text-align:right;font-size:14px;margin-top:12px;">
                         <div>Subtotal: <strong>Tk ${fmt$(d.subtotal)}</strong></div>
                         <div>VAT: <strong>Tk ${fmt$(d.total_vat)}</strong></div>
@@ -566,6 +585,9 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                                     />
                                                     <span className="font-mono text-xs">{c.challan_number}</span>
                                                     <span className="text-xs text-muted-foreground">— {c.product_name || c.po_number || '—'}</span>
+                                                    {c.items && c.items.length > 0 && (
+                                                        <span className="ml-auto text-[10px] text-muted-foreground">{fmtMealBreakdown(c.items)}</span>
+                                                    )}
                                                 </label>
                                             ))
                                         )}
@@ -632,15 +654,26 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                     <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Challans</span>
                                     <div className="space-y-1">
                                         {viewing.challans.map((c) => (
-                                            <div key={c.id} className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-2">
-                                                <span className="font-mono text-xs font-semibold">{c.challan_number}</span>
-                                                <span className="text-xs text-muted-foreground">|</span>
-                                                <span className="text-xs text-muted-foreground">{c.product_name || c.po_number || '—'}</span>
-                                                <span className="text-xs text-muted-foreground">|</span>
-                                                <span className="text-xs text-muted-foreground">{fmtDate(c.challan_date)}</span>
-                                                <span className={`ml-auto inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColors[c.challan_status] || 'bg-slate-100 text-slate-600'}`}>
-                                                    {c.challan_status}
-                                                </span>
+                                            <div key={c.id} className="rounded-lg border border-border bg-muted/30 p-2">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="font-mono text-xs font-semibold">{c.challan_number}</span>
+                                                    <span className="text-xs text-muted-foreground">|</span>
+                                                    <span className="text-xs text-muted-foreground">{c.product_name || c.po_number || '—'}</span>
+                                                    <span className="text-xs text-muted-foreground">|</span>
+                                                    <span className="text-xs text-muted-foreground">{fmtDate(c.challan_date)}</span>
+                                                    <span className={`ml-auto inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColors[c.challan_status] || 'bg-slate-100 text-slate-600'}`}>
+                                                        {c.challan_status}
+                                                    </span>
+                                                </div>
+                                                {c.items && c.items.length > 0 && (
+                                                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                                        {c.items.map((it, idx) => (
+                                                            <span key={idx} className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                                                {it.meal_type} <strong className="text-foreground">{it.quantity}</strong>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -653,6 +686,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                         <thead>
                                             <tr className="border-b border-border bg-muted/50">
                                                 <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Product</th>
+                                                <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Meal</th>
                                                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Qty</th>
                                                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Price</th>
                                                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">VAT</th>
@@ -663,6 +697,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                             {viewing.items.map((it) => (
                                                 <tr key={it.id} className="border-t border-border first:border-t-0">
                                                     <td className="px-3 py-2 text-xs">{it.product_name}</td>
+                                                    <td className="px-3 py-2 text-xs text-muted-foreground">{it.meal_type || '—'}</td>
                                                     <td className="px-3 py-2 text-right text-xs tabular-nums">{it.quantity}</td>
                                                     <td className="px-3 py-2 text-right text-xs tabular-nums">Tk {fmt$(it.unit_price)}</td>
                                                     <td className="px-3 py-2 text-right text-xs tabular-nums">{it.vat_rate}% (Tk {fmt$(it.vat_amount)})</td>

@@ -83,6 +83,7 @@ type Challan = {
     address: string;
     notes: string;
     total_amount: number;
+    total_qty: number;
     status: string;
     items: ChlItem[];
 };
@@ -210,9 +211,7 @@ function ChallanForm({
                     >
                         <option value="">Select PO (Product)</option>
                         {filteredProducts.map((p) => {
-                            const ordered = p.total_ordered || 0;
-                            const delivered = p.total_delivered || 0;
-                            const remaining = Math.max(0, ordered - delivered);
+                            const remaining = (p.meals || []).reduce((sum, m) => sum + Math.max(0, m.quantity - (m.delivered_quantity || 0)), 0);
                             return (
                                 <option key={p.id} value={p.id}>
                                     {p.code} - {p.name} [{remaining} remaining]
@@ -288,7 +287,7 @@ function ChallanForm({
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Label className="w-20 text-xs text-muted-foreground">Deliver Qty</Label>
+                                        <Label className="w-20 text-xs text-muted-foreground">Dispatch Qty</Label>
                                         <Input
                                             type="number"
                                             className="h-8 flex-1 text-xs"
@@ -725,8 +724,23 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                 variant="outline"
                                 size="sm"
                                 className="h-7 text-xs"
-                                onClick={() => {
-                                    selectedIds.forEach((id) => window.open(`/api/challans/${id}/print`, '_blank'));
+                                onClick={async () => {
+                                    try {
+                                        const res = await fetch('/api/challans/print-batch', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                                            body: JSON.stringify({ ids: Array.from(selectedIds) }),
+                                        });
+                                        if (res.ok) {
+                                            const blob = await res.blob();
+                                            const url = window.URL.createObjectURL(blob);
+                                            window.open(url, '_blank');
+                                        } else {
+                                            toast.error('Failed to print challans');
+                                        }
+                                    } catch {
+                                        toast.error('Failed to print challans');
+                                    }
                                 }}
                             >
                                 <Printer className="mr-1 size-3" />
@@ -829,6 +843,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">PO</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Party</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
+                                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Qty</th>
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Amount</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actions</th>
@@ -837,7 +852,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                             <tbody>
                                 {challans.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-4 py-16 text-center">
+                                        <td colSpan={9} className="px-4 py-16 text-center">
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                                 <Package className="size-8 opacity-40" />
                                                 <p className="text-sm font-medium">No challans found</p>
@@ -876,6 +891,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                             <td className="px-4 py-3 text-xs text-muted-foreground">{c.po_number || '—'}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground">{c.party_name || '—'}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(c.date)}</td>
+                                            <td className="px-4 py-3 text-right text-xs font-medium tabular-nums">{c.total_qty}</td>
                                             <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">৳{fmt$(c.total_amount || 0)}</td>
                                             <td className="px-4 py-3 text-center">
                                                 <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusColors[c.status] || 'bg-slate-100 text-slate-600'}`}>

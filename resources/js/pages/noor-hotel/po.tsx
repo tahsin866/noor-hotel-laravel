@@ -456,70 +456,8 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         setDeleteOpen(true);
     };
 
-    const printPo = async (product: Product) => {
-        try {
-            const res = await fetch(`/api/products/${product.id}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            const p = await res.json();
-            const meals = p.meals || [];
-            const subtotal = p.meals_subtotal || 0;
-            const vat = Math.round(subtotal * p.vat_rate / 100 * 100) / 100;
-            const total = subtotal + vat;
-            const today = new Date().toLocaleDateString('en-GB');
-
-            let mealRows = '';
-            meals.forEach((m: ProductMeal) => {
-                const line = m.quantity * m.unit_price;
-                const remaining = Math.max(0, m.quantity - (m.delivered_quantity || 0));
-                mealRows += `<tr><td>${m.meal_type.charAt(0).toUpperCase() + m.meal_type.slice(1)}</td><td style="text-align:center">${m.quantity}</td><td style="text-align:right">$${m.unit_price.toFixed(2)}</td><td style="text-align:right">$${line.toFixed(2)}</td><td style="text-align:center">${m.delivered_quantity || 0}</td><td style="text-align:center">${remaining}</td><td>${m.description || '-'}</td></tr>`;
-            });
-
-            const printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>PO - ${p.name}</title><style>
-                @page{size:A4;margin:15mm;}
-                body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:20px;font-size:13px;}
-                h1{font-size:22px;margin:0;color:#0f172a;}
-                .header{border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:16px;}
-                .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin-bottom:16px;font-size:13px;}
-                .info-grid span.label{color:#64748b;font-weight:600;}
-                table.items{width:100%;border-collapse:collapse;margin-bottom:16px;}
-                table.items th{background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:12px;color:#475569;text-transform:uppercase;}
-                table.items td{padding:8px 12px;border:1px solid #e2e8f0;}
-                .totals{margin-top:12px;text-align:right;}
-                .totals div{padding:4px 0;font-size:13px;}
-                .totals .grand{font-size:16px;font-weight:bold;border-top:2px solid #2563eb;padding-top:8px;margin-top:4px;}
-                .footer{margin-top:40px;text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;}
-                </style></head><body>
-                <div class="header"><h1>PURCHASE ORDER</h1><p style="color:#64748b;margin:4px 0 0;font-size:12px;">Noor Hotel PRG</p></div>
-                <div class="info-grid">
-                <div><span class="label">PO Code:</span> ${p.code}</div>
-                <div><span class="label">Name:</span> ${p.name}</div>
-                <div><span class="label">Customer PO:</span> ${p.customer_po_number || 'N/A'}</div>
-                <div><span class="label">Party:</span> ${p.party_name || 'N/A'}</div>
-                <div><span class="label">Unit:</span> ${p.unit}</div>
-                <div><span class="label">Date:</span> ${today}</div>
-                <div><span class="label">VAT Rate:</span> ${p.vat_rate}%</div>
-                </div>
-                ${p.description ? `<div style="margin-bottom:16px;"><span class="label" style="color:#64748b;font-weight:600;">Description:</span><p style="margin:4px 0">${p.description}</p></div>` : ''}
-                <table class="items"><thead><tr><th>Type</th><th style="text-align:center">Ordered</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Amount</th><th style="text-align:center">Delivered</th><th style="text-align:center">Remaining</th><th>Description</th></tr></thead><tbody>
-                ${mealRows || '<tr><td colspan="7" style="text-align:center;color:#94a3b8">No items</td></tr>'}
-                </tbody></table>
-                <div class="totals">
-                <div>Subtotal: <strong>$${subtotal.toFixed(2)}</strong></div>
-                <div>VAT (${p.vat_rate}%): <strong>$${vat.toFixed(2)}</strong></div>
-                <div class="grand">Total (inc. VAT): <strong>$${total.toFixed(2)}</strong></div>
-                </div>
-                <div class="footer">Generated on ${today} &middot; Noor Hotel PRG</div>
-                </body></html>`;
-            const win = window.open('', '', 'width=800,height=600');
-            if (win) {
-                win.document.write(printHtml);
-                win.document.close();
-                setTimeout(() => { win.print(); }, 500);
-            }
-        } catch {
-            toast.error('Failed to print PO');
-        }
+    const printPo = (product: Product) => {
+        window.open(`/api/products/${product.id}/print`, '_blank');
     };
 
     const emailPo = (product: Product) => {

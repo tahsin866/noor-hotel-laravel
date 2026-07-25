@@ -69,6 +69,7 @@ class InvoiceController extends Controller
             'items.product',
             'challans.product',
             'challans.product.party',
+            'challans.items.productMeal',
         ])->findOrFail($id);
 
         $items = $invoice->items->map(function ($item) {
@@ -76,6 +77,7 @@ class InvoiceController extends Controller
                 'id' => $item->id,
                 'product_id' => $item->product_id,
                 'product_name' => $item->product->name ?? '-',
+                'meal_type' => $item->meal_type,
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
                 'vat_rate' => $item->vat_rate,
@@ -85,6 +87,14 @@ class InvoiceController extends Controller
         });
 
         $challans = $invoice->challans->map(function ($ch) {
+            $challanItems = $ch->items->map(function ($ci) {
+                return [
+                    'meal_type' => $ci->productMeal->meal_type ?? '-',
+                    'quantity' => $ci->quantity,
+                    'description' => $ci->productMeal->description ?? '-',
+                ];
+            });
+
             return [
                 'id' => $ch->id,
                 'challan_number' => $ch->challan_number,
@@ -93,6 +103,7 @@ class InvoiceController extends Controller
                 'party_name' => $ch->product->party->party_name ?? '-',
                 'challan_date' => $ch->date,
                 'challan_status' => $ch->status,
+                'items' => $challanItems,
             ];
         });
 
@@ -160,16 +171,20 @@ class InvoiceController extends Controller
                     continue;
                 }
 
+                $mealType = $ci->productMeal->meal_type ?? null;
+                $groupKey = $productId.'_'.$mealType;
+
                 $unitPrice = (float) $ci->unit_price;
                 $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 15);
                 $quantity = (int) $ci->quantity;
 
-                if (isset($itemMap[$productId])) {
-                    $itemMap[$productId]['quantity'] += $quantity;
+                if (isset($itemMap[$groupKey])) {
+                    $itemMap[$groupKey]['quantity'] += $quantity;
                 } else {
                     $product = $ci->productMeal->product;
-                    $itemMap[$productId] = [
+                    $itemMap[$groupKey] = [
                         'product_id' => $productId,
+                        'meal_type' => $mealType,
                         'quantity' => $quantity,
                         'unit_price' => $unitPrice,
                         'vat_rate' => $vatRate,
@@ -390,22 +405,26 @@ class InvoiceController extends Controller
             foreach ($challan->items as $ci) {
                 $productId = $ci->productMeal->product->id ?? null;
                 if ($productId) {
+                    $mealType = $ci->productMeal->meal_type ?? null;
+                    $groupKey = $productId.'_'.$mealType;
                     $desc = $ci->productMeal->description ?? $ci->productMeal->product->name ?? '-';
-                    if (! isset($descriptions[$productId])) {
-                        $descriptions[$productId] = [];
+                    if (! isset($descriptions[$groupKey])) {
+                        $descriptions[$groupKey] = [];
                     }
-                    $descriptions[$productId][] = $desc;
+                    $descriptions[$groupKey][] = $desc;
                 }
             }
         }
 
         $items = $invoice->items->map(function ($item) use ($descriptions) {
-            $descs = $descriptions[$item->product_id] ?? [];
+            $groupKey = $item->product_id.'_'.$item->meal_type;
+            $descs = $descriptions[$groupKey] ?? [];
             $uniqueDescs = array_unique($descs);
 
             return [
                 'product_name' => $item->product->name ?? '-',
                 'description' => implode(', ', $uniqueDescs) ?: ($item->product->name ?? '-'),
+                'meal_type' => $item->meal_type,
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
                 'vat_rate' => $item->vat_rate,
@@ -415,10 +434,19 @@ class InvoiceController extends Controller
         });
 
         $challans = $invoice->challans->map(function ($ch) {
+            $challanItems = $ch->items->map(function ($ci) {
+                return [
+                    'meal_type' => $ci->productMeal->meal_type ?? '-',
+                    'quantity' => $ci->quantity,
+                    'description' => $ci->productMeal->description ?? '-',
+                ];
+            });
+
             return [
                 'challan_number' => $ch->challan_number,
                 'product_name' => $ch->product->name ?? '-',
                 'date' => Carbon::parse($ch->date)->format('d/m/Y'),
+                'items' => $challanItems,
             ];
         });
 
@@ -436,7 +464,7 @@ class InvoiceController extends Controller
         $pdf = Pdf::loadView('pdf.invoice', $data);
         $pdf->setPaper('a4');
 
-        return $pdf->download('invoice-'.$invoice->invoice_number.'.pdf');
+        return $pdf->stream('invoice-'.$invoice->invoice_number.'.pdf');
     }
 
     private function numberToWords(float $amount): string

@@ -4,7 +4,8 @@ namespace App\Http\Controllers\party;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
-use App\Models\ProductMeal;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,9 +32,13 @@ class ProductController extends Controller
         if ($status && $status !== 'all') {
             $query->whereHas('meals', function ($q) use ($status) {
                 $q->groupBy('product_id');
-                $q->havingRaw('SUM(delivered_quantity) ' . ($status === 'delivered' ? '>=' : '<') . ' SUM(quantity)');
-                if ($status === 'partial') {
+                if ($status === 'delivered') {
+                    $q->havingRaw('SUM(delivered_quantity) >= SUM(quantity)');
+                } elseif ($status === 'partial') {
                     $q->havingRaw('SUM(delivered_quantity) > 0');
+                    $q->havingRaw('SUM(delivered_quantity) < SUM(quantity)');
+                } elseif ($status === 'pending') {
+                    $q->havingRaw('SUM(delivered_quantity) = 0');
                 }
             });
         }
@@ -62,7 +67,7 @@ class ProductController extends Controller
             'meals.*.description' => 'nullable|string',
         ]);
 
-        $validated['code'] = 'PO-' . str_pad(Product::max('id') + 1, 4, '0', STR_PAD_LEFT);
+        $validated['code'] = 'PO-'.str_pad(Product::max('id') + 1, 4, '0', STR_PAD_LEFT);
 
         $meals = $validated['meals'];
         unset($validated['meals']);
@@ -137,5 +142,41 @@ class ProductController extends Controller
         return response()->json([
             'message' => 'PO deleted successfully.',
         ]);
+    }
+
+    public function print(Product $product)
+    {
+        $product->load(['party:id,party_name', 'meals']);
+
+        $meals = $product->meals;
+        $subtotal = $meals->sum(fn ($m) => $m->quantity * $m->unit_price);
+        $vat = round($subtotal * $product->vat_rate / 100, 2);
+
+        $items = $meals->map(function ($m) {
+            return [
+                'meal_type' => ucfirst($m->meal_type),
+                'quantity' => $m->quantity,
+                'unit_price' => $m->unit_price,
+                'total' => $m->quantity * $m->unit_price,
+                'delivered_quantity' => $m->delivered_quantity ?? 0,
+                'remaining' => max(0, $m->quantity - ($m->delivered_quantity ?? 0)),
+                'description' => $m->description ?? '-',
+            ];
+        });
+
+        $data = [
+            'product' => $product,
+            'party_name' => $product->party->party_name ?? '-',
+            'items' => $items,
+            'subtotal' => $subtotal,
+            'vat' => $vat,
+            'total' => $subtotal + $vat,
+            'date' => Carbon::now()->format('d/m/Y'),
+        ];
+
+        $pdf = Pdf::loadView('pdf.po', $data);
+        $pdf->setPaper('a4');
+
+        return $pdf->stream('po-'.$product->code.'.pdf');
     }
 }

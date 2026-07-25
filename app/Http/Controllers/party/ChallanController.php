@@ -18,7 +18,7 @@ class ChallanController extends Controller
         $search = $request->get('search');
         $partyId = $request->get('party_id');
 
-        $query = Challan::with(['product', 'product.party', 'user'])
+        $query = Challan::with(['product', 'product.party', 'user', 'items'])
             ->orderByDesc('created_at');
 
         if ($status) {
@@ -45,6 +45,8 @@ class ChallanController extends Controller
         $items = $query->skip(($page - 1) * $limit)->take($limit)->get();
 
         $items = $items->map(function ($item) {
+            $totalQty = $item->items->sum('quantity');
+
             return [
                 'id' => $item->id,
                 'challan_number' => $item->challan_number,
@@ -57,6 +59,7 @@ class ChallanController extends Controller
                 'address' => $item->address,
                 'notes' => $item->notes,
                 'total_amount' => $item->total_amount,
+                'total_qty' => $totalQty,
                 'status' => $item->status,
                 'created_at' => $item->created_at,
             ];
@@ -161,6 +164,14 @@ class ChallanController extends Controller
         ]);
 
         $challan = Challan::findOrFail($id);
+        $wasDispatched = $challan->status === 'dispatched';
+
+        if ($wasDispatched) {
+            foreach ($challan->items as $oldItem) {
+                ProductMeal::where('id', $oldItem['product_meal_id'])
+                    ->decrement('delivered_quantity', $oldItem['quantity']);
+            }
+        }
 
         $total = 0;
         foreach ($request->items as $item) {
@@ -186,12 +197,27 @@ class ChallanController extends Controller
             ]);
         }
 
+        if ($wasDispatched) {
+            foreach ($request->items as $item) {
+                ProductMeal::where('id', $item['product_meal_id'])
+                    ->increment('delivered_quantity', $item['quantity']);
+            }
+        }
+
         return response()->json(['success' => true, 'message' => 'Challan updated']);
     }
 
     public function destroy($id)
     {
         $challan = Challan::findOrFail($id);
+
+        if ($challan->status === 'dispatched') {
+            foreach ($challan->items as $item) {
+                ProductMeal::where('id', $item->product_meal_id)
+                    ->decrement('delivered_quantity', $item->quantity);
+            }
+        }
+
         $challan->items()->delete();
         $challan->delete();
 
@@ -203,12 +229,23 @@ class ChallanController extends Controller
         $request->validate(['status' => 'required|in:pending,dispatched,delivered,cancelled']);
 
         $challan = Challan::findOrFail($id);
-        $challan->update(['status' => $request->status]);
+        $previousStatus = $challan->status;
+        $newStatus = $request->status;
 
-        if ($request->status === 'delivered') {
+        $challan->update(['status' => $newStatus]);
+
+        $wasDispatched = $previousStatus === 'dispatched';
+        $isNowDispatched = $newStatus === 'dispatched';
+
+        if (! $wasDispatched && $isNowDispatched) {
             foreach ($challan->items as $item) {
                 ProductMeal::where('id', $item->product_meal_id)
                     ->increment('delivered_quantity', $item->quantity);
+            }
+        } elseif ($wasDispatched && ! $isNowDispatched && $newStatus !== 'delivered') {
+            foreach ($challan->items as $item) {
+                ProductMeal::where('id', $item->product_meal_id)
+                    ->decrement('delivered_quantity', $item->quantity);
             }
         }
 
@@ -246,6 +283,44 @@ class ChallanController extends Controller
         $pdf = Pdf::loadView('pdf.challan', $data);
         $pdf->setPaper('a4');
 
-        return $pdf->download('challan-'.$challan->challan_number.'.pdf');
+        return $pdf->stream('challan-'.$challan->challan_number.'.pdf');
+    }
+
+    public function printBatch(Request $request)
+    {
+        $request->validate(['ids' => 'required|array|min:1']);
+        $request->validate(['ids.*' => 'required|integer|exists:challans,id']);
+
+        $challans = Challan::with(['product', 'product.party', 'items.productMeal'])
+            ->whereIn('id', $request->ids)
+            ->orderBy('id')
+            ->get();
+
+        $challansData = $challans->map(function ($challan) {
+            $items = $challan->items->map(function ($item) {
+                return [
+                    'product_name' => $item->productMeal->product->name ?? '-',
+                    'meal_type' => $item->productMeal->meal_type ?? '-',
+                    'description' => $item->productMeal->description ?? '-',
+                    'quantity' => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                    'total' => $item->quantity * $item->unit_price,
+                ];
+            });
+
+            return [
+                'challan' => $challan,
+                'product_name' => $challan->product->name ?? '-',
+                'po_number' => $challan->product->code ?? '-',
+                'customer_po_number' => $challan->product->customer_po_number ?? '-',
+                'party_name' => $challan->product->party->party_name ?? '-',
+                'items' => $items,
+            ];
+        });
+
+        $pdf = Pdf::loadView('pdf.challan_batch', ['challans' => $challansData]);
+        $pdf->setPaper('a4');
+
+        return $pdf->stream('challans-batch.pdf');
     }
 }

@@ -26,7 +26,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('chalans', function () {
         $products = Product::with(['party', 'meals'])
-            ->select('id', 'name', 'code', 'unit', 'party_id', 'total_ordered', 'total_delivered')
+            ->select('id', 'name', 'code', 'unit', 'party_id')
+            ->withSum('meals as total_ordered', 'quantity')
+            ->withSum('meals as total_delivered', 'delivered_quantity')
             ->get();
         $parties = Party::select('id', 'party_name')->get();
 
@@ -41,7 +43,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $products = Product::with(['party'])
             ->select('id', 'name', 'code', 'unit', 'party_id', 'customer_po_number')
             ->get();
-        $challans = Challan::with(['product', 'product.party'])
+        $challans = Challan::with(['product', 'product.party', 'items.productMeal'])
             ->where('status', 'delivered')
             ->whereNotIn('id', function ($query) {
                 $query->select('challan_id')->from('invoice_challans');
@@ -49,6 +51,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->select('id', 'challan_number', 'product_id', 'date', 'status')
             ->get()
             ->map(function ($c) {
+                $items = $c->items->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'meal_type' => $item->productMeal->meal_type ?? '-',
+                        'quantity' => $item->quantity,
+                        'description' => $item->productMeal->description ?? '-',
+                    ];
+                });
+
                 return [
                     'id' => $c->id,
                     'challan_number' => $c->challan_number,
@@ -59,6 +70,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                     'party_name' => $c->product->party->party_name ?? '-',
                     'date' => $c->date,
                     'status' => $c->status,
+                    'items' => $items,
                 ];
             });
 

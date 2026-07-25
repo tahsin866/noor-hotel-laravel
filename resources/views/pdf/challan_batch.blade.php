@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8"/>
-    <title>Challan {{ $challan->challan_number }}</title>
+    <title>Challans Batch Print</title>
     <style>
         @page { size: A4; margin: 15mm; }
         body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
@@ -12,9 +12,10 @@
         table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
         table.items td { padding: 8px 12px; border: 1px solid #e2e8f0; }
         .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
-        .content-wrapper { position: relative; min-height: 760px; }
-        .footer { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-        .signatures { position: absolute; bottom: 30px; left: 0; right: 0; }
+        .signatures { margin-top: 40px; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 20px; }
+        .challan-page { page-break-after: always; }
+        .challan-page:last-child { page-break-after: avoid; }
     </style>
 </head>
 <body>
@@ -24,26 +25,27 @@
     }
     @endphp
 
-    <div class="content-wrapper">
+    @foreach($challans as $index => $data)
+    <div class="challan-page">
         <div class="header">
             <h1>DELIVERY CHALLAN</h1>
         </div>
 
         <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
             <tr>
-                <td style="width:50%;border:none;padding:4px 0;"><strong>Challan No:</strong> {{ $challan->challan_number }}</td>
-                <td style="width:50%;border:none;padding:4px 0;"><strong>Date:</strong> {{ \Carbon\Carbon::parse($challan->date)->format('d/m/Y') }}</td>
+                <td style="width:50%;border:none;padding:4px 0;"><strong>Challan No:</strong> {{ $data['challan']->challan_number }}</td>
+                <td style="width:50%;border:none;padding:4px 0;"><strong>Date:</strong> {{ \Carbon\Carbon::parse($data['challan']->date)->format('d/m/Y') }}</td>
             </tr>
             <tr>
-                <td style="border:none;padding:4px 0;"><strong>PO:</strong> {{ $customer_po_number }}</td>
-                <td style="border:none;padding:4px 0;"><strong>Product:</strong> {{ $product_name }}</td>
+                <td style="border:none;padding:4px 0;"><strong>PO:</strong> {{ $data['customer_po_number'] }}</td>
+                <td style="border:none;padding:4px 0;"><strong>Product:</strong> {{ $data['product_name'] }}</td>
             </tr>
             <tr>
-                <td style="border:none;padding:4px 0;"><strong>Party:</strong> {{ $party_name }}</td>
+                <td style="border:none;padding:4px 0;"><strong>Party:</strong> {{ $data['party_name'] }}</td>
             </tr>
-            @if($challan->address)
+            @if($data['challan']->address)
             <tr>
-                <td colspan="2" style="border:none;padding:4px 0;"><strong>Address:</strong> {{ $challan->address }}</td>
+                <td colspan="2" style="border:none;padding:4px 0;"><strong>Address:</strong> {{ $data['challan']->address }}</td>
             </tr>
             @endif
         </table>
@@ -57,7 +59,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($items as $i => $item)
+                @foreach($data['items'] as $i => $item)
                 <tr>
                     <td>{{ $i + 1 }}</td>
                     <td>{{ $item['description'] }}</td>
@@ -67,9 +69,9 @@
             </tbody>
         </table>
 
-        @if($challan->notes)
+        @if($data['challan']->notes)
         <div class="notes">
-            <strong>Notes:</strong> {{ $challan->notes }}
+            <strong>Notes:</strong> {{ $data['challan']->notes }}
         </div>
         @endif
 
@@ -95,5 +97,6 @@
             Generated on {{ now()->format('d/m/Y') }} &mdash; Noor Hotel PRG
         </div>
     </div>
+    @endforeach
 </body>
 </html>
