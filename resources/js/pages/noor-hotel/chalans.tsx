@@ -34,6 +34,8 @@ import {
     Truck,
     Search,
     AlertTriangle,
+    CheckSquare,
+    Square,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -55,6 +57,7 @@ type Product = {
     party_id: number;
     party?: Party;
     party_name: string;
+    customer_po_number: string;
     meals: ProductMeal[];
     total_ordered: number;
     total_delivered: number;
@@ -74,6 +77,7 @@ type Challan = {
     product_id: number;
     product_name: string;
     po_number: string;
+    customer_po_number: string;
     party_name: string;
     date: string;
     address: string;
@@ -335,6 +339,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
     const [deleting, setDeleting] = useState<Challan | null>(null);
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
     const [selectedPo, setSelectedPo] = useState('');
     const [formParty, setFormParty] = useState('');
@@ -712,11 +717,114 @@ export default function Challans({ products, parties }: { products: Product[]; p
                     </span>
                 </div>
 
+                {selectedIds.size > 0 && (
+                    <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5">
+                        <span className="text-xs font-medium text-primary">{selectedIds.size} selected</span>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                    selectedIds.forEach((id) => window.open(`/api/challans/${id}/print`, '_blank'));
+                                }}
+                            >
+                                <Printer className="mr-1 size-3" />
+                                Print
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={async () => {
+                                    for (const id of selectedIds) {
+                                        await fetch(`/api/challans/${id}/status`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                                            body: JSON.stringify({ status: 'dispatched' }),
+                                        });
+                                    }
+                                    toast.success(`${selectedIds.size} challan(s) dispatched`);
+                                    setSelectedIds(new Set());
+                                    fetchChallans();
+                                }}
+                            >
+                                <Send className="mr-1 size-3" />
+                                Dispatch
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={async () => {
+                                    for (const id of selectedIds) {
+                                        await fetch(`/api/challans/${id}/status`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                                            body: JSON.stringify({ status: 'delivered' }),
+                                        });
+                                    }
+                                    toast.success(`${selectedIds.size} challan(s) delivered`);
+                                    setSelectedIds(new Set());
+                                    fetchChallans();
+                                }}
+                            >
+                                <Send className="mr-1 size-3" />
+                                Deliver
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={async () => {
+                                    for (const id of selectedIds) {
+                                        await fetch(`/api/challans/${id}/status`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                                            body: JSON.stringify({ status: 'cancelled' }),
+                                        });
+                                    }
+                                    toast.success(`${selectedIds.size} challan(s) cancelled`);
+                                    setSelectedIds(new Set());
+                                    fetchChallans();
+                                }}
+                            >
+                                <Trash2 className="mr-1 size-3" />
+                                Cancel
+                            </Button>
+                        </div>
+                        <button
+                            onClick={() => setSelectedIds(new Set())}
+                            className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                )}
+
                 <div className="relative flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 shadow-sm dark:border-sidebar-border">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-sidebar-border/70 bg-muted/50 dark:border-sidebar-border">
+                                    <th className="w-10 px-4 py-3 text-center">
+                                        <button
+                                            onClick={() => {
+                                                if (selectedIds.size === challans.length) {
+                                                    setSelectedIds(new Set());
+                                                } else {
+                                                    setSelectedIds(new Set(challans.map((c) => c.id)));
+                                                }
+                                            }}
+                                            className="inline-flex items-center justify-center"
+                                        >
+                                            {selectedIds.size === challans.length && challans.length > 0 ? (
+                                                <CheckSquare className="size-4 text-primary" />
+                                            ) : (
+                                                <Square className="size-4 text-muted-foreground" />
+                                            )}
+                                        </button>
+                                    </th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Number</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">PO</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Party</th>
@@ -729,7 +837,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                             <tbody>
                                 {challans.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="px-4 py-16 text-center">
+                                        <td colSpan={8} className="px-4 py-16 text-center">
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                                 <Package className="size-8 opacity-40" />
                                                 <p className="text-sm font-medium">No challans found</p>
@@ -740,6 +848,28 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                 ) : (
                                     challans.map((c) => (
                                         <tr key={c.id} className="border-b border-sidebar-border/70 transition-colors last:border-0 hover:bg-muted/30 dark:border-sidebar-border">
+                                            <td className="w-10 px-4 py-3 text-center">
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedIds((prev) => {
+                                                            const next = new Set(prev);
+                                                            if (next.has(c.id)) {
+                                                                next.delete(c.id);
+                                                            } else {
+                                                                next.add(c.id);
+                                                            }
+                                                            return next;
+                                                        });
+                                                    }}
+                                                    className="inline-flex items-center justify-center"
+                                                >
+                                                    {selectedIds.has(c.id) ? (
+                                                        <CheckSquare className="size-4 text-primary" />
+                                                    ) : (
+                                                        <Square className="size-4 text-muted-foreground" />
+                                                    )}
+                                                </button>
+                                            </td>
                                             <td className="px-4 py-3">
                                                 <span className="font-mono text-xs font-semibold">{c.challan_number}</span>
                                             </td>

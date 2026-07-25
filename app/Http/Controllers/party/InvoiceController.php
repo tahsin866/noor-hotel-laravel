@@ -4,12 +4,10 @@ namespace App\Http\Controllers\party;
 
 use App\Http\Controllers\Controller;
 use App\Models\Challan;
-use App\Models\ChallanItem;
 use App\Models\Invoice;
-use App\Models\InvoiceItem;
 use App\Models\PaymentHistory;
-use App\Models\ProductMeal;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
@@ -158,7 +156,9 @@ class InvoiceController extends Controller
         foreach ($challans as $challan) {
             foreach ($challan->items as $ci) {
                 $productId = $ci->productMeal->product->id ?? null;
-                if (!$productId) continue;
+                if (! $productId) {
+                    continue;
+                }
 
                 $unitPrice = (float) $ci->unit_price;
                 $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 15);
@@ -391,7 +391,7 @@ class InvoiceController extends Controller
                 $productId = $ci->productMeal->product->id ?? null;
                 if ($productId) {
                     $desc = $ci->productMeal->description ?? $ci->productMeal->product->name ?? '-';
-                    if (!isset($descriptions[$productId])) {
+                    if (! isset($descriptions[$productId])) {
                         $descriptions[$productId] = [];
                     }
                     $descriptions[$productId][] = $desc;
@@ -402,6 +402,7 @@ class InvoiceController extends Controller
         $items = $invoice->items->map(function ($item) use ($descriptions) {
             $descs = $descriptions[$item->product_id] ?? [];
             $uniqueDescs = array_unique($descs);
+
             return [
                 'product_name' => $item->product->name ?? '-',
                 'description' => implode(', ', $uniqueDescs) ?: ($item->product->name ?? '-'),
@@ -417,21 +418,85 @@ class InvoiceController extends Controller
             return [
                 'challan_number' => $ch->challan_number,
                 'product_name' => $ch->product->name ?? '-',
-                'date' => \Carbon\Carbon::parse($ch->date)->format('d/m/Y'),
-                'status' => $ch->status,
+                'date' => Carbon::parse($ch->date)->format('d/m/Y'),
             ];
         });
+
+        $totalInWords = $this->numberToWords($invoice->total_amount);
 
         $data = [
             'invoice' => $invoice,
             'party_name' => $invoice->party->party_name ?? '-',
+            'party_address' => $invoice->party->address ?? '',
             'items' => $items,
             'challans' => $challans,
+            'total_in_words' => $totalInWords,
         ];
 
         $pdf = Pdf::loadView('pdf.invoice', $data);
         $pdf->setPaper('a4');
 
-        return $pdf->download('invoice-' . $invoice->invoice_number . '.pdf');
+        return $pdf->download('invoice-'.$invoice->invoice_number.'.pdf');
+    }
+
+    private function numberToWords(float $amount): string
+    {
+        $whole = (int) floor($amount);
+        $decimal = (int) round(($amount - $whole) * 100);
+
+        $ones = [
+            '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+            'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+            'Seventeen', 'Eighteen', 'Nineteen',
+        ];
+        $tens = [
+            '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety',
+        ];
+
+        if ($whole === 0) {
+            $words = 'Zero';
+        } else {
+            $words = '';
+            if ($whole >= 10000000) {
+                $words .= $ones[(int) floor($whole / 10000000)].' Crore ';
+                $whole %= 10000000;
+            }
+            if ($whole >= 100000) {
+                $words .= $ones[(int) floor($whole / 100000)].' Lakh ';
+                $whole %= 100000;
+            }
+            if ($whole >= 1000) {
+                $words .= $ones[(int) floor($whole / 1000)].' Thousand ';
+                $whole %= 1000;
+            }
+            if ($whole >= 100) {
+                $words .= $ones[(int) floor($whole / 100)].' Hundred ';
+                $whole %= 100;
+            }
+            if ($whole >= 20) {
+                $words .= $tens[(int) floor($whole / 10)].' ';
+                $whole %= 10;
+            }
+            if ($whole > 0) {
+                $words .= $ones[$whole].' ';
+            }
+            $words = trim($words).' Taka';
+        }
+
+        if ($decimal > 0) {
+            $decimalWords = '';
+            if ($decimal >= 20) {
+                $decimalWords .= $tens[(int) floor($decimal / 10)].' ';
+                $decimal %= 10;
+            }
+            if ($decimal > 0) {
+                $decimalWords .= $ones[$decimal];
+            }
+            $words .= ' and '.trim($decimalWords).' Paisa';
+        }
+
+        $words .= ' Only';
+
+        return $words;
     }
 }

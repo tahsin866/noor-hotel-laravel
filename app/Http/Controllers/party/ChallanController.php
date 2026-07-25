@@ -4,10 +4,9 @@ namespace App\Http\Controllers\party;
 
 use App\Http\Controllers\Controller;
 use App\Models\Challan;
-use App\Models\ChallanItem;
 use App\Models\ProductMeal;
-use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\Request;
 
 class ChallanController extends Controller
 {
@@ -29,10 +28,10 @@ class ChallanController extends Controller
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('challan_number', 'like', "%{$search}%")
-                  ->orWhereHas('product', function ($q2) use ($search) {
-                      $q2->where('code', 'like', "%{$search}%")
-                         ->orWhere('name', 'like', "%{$search}%");
-                  });
+                    ->orWhereHas('product', function ($q2) use ($search) {
+                        $q2->where('code', 'like', "%{$search}%")
+                            ->orWhere('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -52,6 +51,7 @@ class ChallanController extends Controller
                 'product_id' => $item->product_id,
                 'product_name' => $item->product->name ?? '-',
                 'po_number' => $item->product->code ?? '-',
+                'customer_po_number' => $item->product->customer_po_number ?? '-',
                 'party_name' => $item->product->party->party_name ?? '-',
                 'date' => $item->date,
                 'address' => $item->address,
@@ -96,6 +96,7 @@ class ChallanController extends Controller
                 'product_id' => $challan->product_id,
                 'product_name' => $challan->product->name ?? '-',
                 'po_number' => $challan->product->code ?? '-',
+                'customer_po_number' => $challan->product->customer_po_number ?? '-',
                 'party_name' => $challan->product->party->party_name ?? '-',
                 'date' => $challan->date,
                 'address' => $challan->address,
@@ -237,6 +238,7 @@ class ChallanController extends Controller
             'challan' => $challan,
             'product_name' => $challan->product->name ?? '-',
             'po_number' => $challan->product->code ?? '-',
+            'customer_po_number' => $challan->product->customer_po_number ?? '-',
             'party_name' => $challan->product->party->party_name ?? '-',
             'items' => $items,
         ];
@@ -244,6 +246,6 @@ class ChallanController extends Controller
         $pdf = Pdf::loadView('pdf.challan', $data);
         $pdf->setPaper('a4');
 
-        return $pdf->download('challan-' . $challan->challan_number . '.pdf');
+        return $pdf->download('challan-'.$challan->challan_number.'.pdf');
     }
 }

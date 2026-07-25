@@ -34,6 +34,16 @@ import { useCallback, useEffect, useState } from 'react';
 
 type Party = { id: number; party_name: string };
 
+type Product = {
+    id: number;
+    code: string;
+    name: string;
+    unit: string;
+    party_id: number;
+    customer_po_number: string;
+    party?: Party;
+};
+
 type Challan = {
     id: number;
     challan_number: string;
@@ -110,7 +120,7 @@ function fmtDate(d: string) {
     return new Date(d).toLocaleDateString('en-GB');
 }
 
-export default function Invoices({ parties, challans }: { parties: Party[]; challans: Challan[] }) {
+export default function Invoices({ parties, products, challans }: { parties: Party[]; products: Product[]; challans: Challan[] }) {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -127,6 +137,7 @@ export default function Invoices({ parties, challans }: { parties: Party[]; chal
     const [deleting, setDeleting] = useState<Invoice | null>(null);
 
     const [formParty, setFormParty] = useState('');
+    const [formProduct, setFormProduct] = useState('');
     const [formDate, setFormDate] = useState(new Date().toISOString().slice(0, 10));
     const [formDueDate, setFormDueDate] = useState('');
     const [formNotes, setFormNotes] = useState('');
@@ -169,9 +180,14 @@ export default function Invoices({ parties, challans }: { parties: Party[]; chal
         setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
     };
 
+    const filteredProducts = formParty
+        ? products.filter((p) => String(p.party_id) === String(formParty))
+        : [];
+
     const filteredChallans = challans.filter((c) => {
         if (!formParty) return false;
         if (String(c.party_id) !== String(formParty)) return false;
+        if (formProduct && String(c.product_id) !== String(formProduct)) return false;
         const q = chalSearch.toLowerCase();
         if (q && !(c.challan_number + ' ' + c.product_name + ' ' + c.po_number).toLowerCase().includes(q)) return false;
         return true;
@@ -213,6 +229,7 @@ export default function Invoices({ parties, challans }: { parties: Party[]; chal
 
     const resetForm = () => {
         setFormParty('');
+        setFormProduct('');
         setFormDate(new Date().toISOString().slice(0, 10));
         setFormDueDate('');
         setFormNotes('');
@@ -489,7 +506,7 @@ export default function Invoices({ parties, challans }: { parties: Party[]; chal
                                 <Label className="text-xs font-medium text-muted-foreground">Party *</Label>
                                 <select
                                     value={formParty}
-                                    onChange={(e) => { setFormParty(e.target.value); setFormChallanIds([]); }}
+                                    onChange={(e) => { setFormParty(e.target.value); setFormProduct(''); setFormChallanIds([]); }}
                                     className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
                                 >
                                     <option value="">Select party</option>
@@ -508,6 +525,23 @@ export default function Invoices({ parties, challans }: { parties: Party[]; chal
                             <Input type="date" value={formDueDate} onChange={(e) => setFormDueDate(e.target.value)} />
                         </div>
                         <div className="grid gap-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">PO (Product)</Label>
+                            {formParty ? (
+                                <select
+                                    value={formProduct}
+                                    onChange={(e) => { setFormProduct(e.target.value); setFormChallanIds([]); }}
+                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                                >
+                                    <option value="">All POs for this party</option>
+                                    {filteredProducts.map((p) => (
+                                        <option key={p.id} value={p.id}>{p.customer_po_number || p.code} - {p.name}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <p className="py-2 text-xs text-muted-foreground">Select a party first</p>
+                            )}
+                        </div>
+                        <div className="grid gap-1.5">
                             <Label className="text-xs font-medium text-muted-foreground">Challans *</Label>
                             {formParty ? (
                                 <>
@@ -520,7 +554,7 @@ export default function Invoices({ parties, challans }: { parties: Party[]; chal
                                     />
                                     <div className="max-h-48 space-y-1 overflow-y-auto">
                                         {filteredChallans.length === 0 ? (
-                                            <p className="py-2 text-xs text-muted-foreground">No delivered challans for this party</p>
+                                            <p className="py-2 text-xs text-muted-foreground">No delivered challans for this party{formProduct ? ' and PO' : ''}</p>
                                         ) : (
                                             filteredChallans.map((c) => (
                                                 <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-md bg-muted/30 p-2 text-sm hover:bg-muted/60">

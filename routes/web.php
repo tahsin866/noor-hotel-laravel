@@ -2,9 +2,9 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\party\PartyController;
+use App\Models\Challan;
 use App\Models\Party;
 use App\Models\Product;
-use App\Models\Challan;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -38,6 +38,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('invoices', function () {
         $parties = Party::select('id', 'party_name')->get();
+        $products = Product::with(['party'])
+            ->select('id', 'name', 'code', 'unit', 'party_id', 'customer_po_number')
+            ->get();
         $challans = Challan::with(['product', 'product.party'])
             ->where('status', 'delivered')
             ->whereNotIn('id', function ($query) {
@@ -61,6 +64,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         return Inertia::render('noor-hotel/invoice', [
             'parties' => $parties,
+            'products' => $products,
             'challans' => $challans,
         ]);
     })->name('invoices');
