@@ -42,7 +42,7 @@ class Invoice extends Model
 
     public function user()
     {
-        return $this->belongsTo(\App\Models\User::class);
+        return $this->belongsTo(User::class);
     }
 
     public function items()
@@ -66,9 +66,16 @@ class Invoice extends Model
 
         static::creating(function ($model) {
             if (empty($model->invoice_number)) {
-                $last = DB::select("SELECT MAX(CAST(SUBSTR(invoice_number, 5) AS INTEGER)) as max_num FROM invoices");
+                $year = now()->year;
+                $prefix = "Noor/{$year}/IN/";
+
+                $last = DB::select(
+                    'SELECT MAX(CAST(SUBSTR(invoice_number, ?) AS INTEGER)) as max_num FROM invoices WHERE invoice_number LIKE ?',
+                    [strlen($prefix) + 1, $prefix.'%']
+                );
+
                 $next = ($last[0]->max_num ?? 0) + 1;
-                $model->invoice_number = 'INV-' . str_pad($next, 4, '0', STR_PAD_LEFT);
+                $model->invoice_number = $prefix.str_pad($next, 4, '0', STR_PAD_LEFT);
             }
         });
     }

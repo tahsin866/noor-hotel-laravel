@@ -12,8 +12,8 @@
         table.info { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
         table.info td { border: none; padding: 4px 0; vertical-align: top; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
-        table.items td { padding: 8px 12px; border: 1px solid #e2e8f0; }
+        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.items td { padding: 8px 12px; border: 1px solid #000; }
         .totals { text-align: right; font-size: 14px; margin-top: 12px; }
         .totals div { margin-bottom: 4px; }
         .totals .grand { font-size: 16px; border-top: 2px solid #e2e8f0; padding-top: 6px; margin-top: 6px; }

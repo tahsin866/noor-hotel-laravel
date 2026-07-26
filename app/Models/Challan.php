@@ -28,7 +28,7 @@ class Challan extends Model
 
     public function user()
     {
-        return $this->belongsTo(\App\Models\User::class);
+        return $this->belongsTo(User::class);
     }
 
     public function items()
@@ -42,9 +42,16 @@ class Challan extends Model
 
         static::creating(function ($model) {
             if (empty($model->challan_number)) {
-                $last = DB::select("SELECT MAX(CAST(SUBSTR(challan_number, 5) AS INTEGER)) as max_num FROM challans");
+                $year = now()->year;
+                $prefix = "Noor/{$year}/CH/";
+
+                $last = DB::select(
+                    'SELECT MAX(CAST(SUBSTR(challan_number, ?) AS INTEGER)) as max_num FROM challans WHERE challan_number LIKE ?',
+                    [strlen($prefix) + 1, $prefix.'%']
+                );
+
                 $next = ($last[0]->max_num ?? 0) + 1;
-                $model->challan_number = 'CH-' . str_pad($next, 4, '0', STR_PAD_LEFT);
+                $model->challan_number = $prefix.str_pad($next, 4, '0', STR_PAD_LEFT);
             }
         });
     }

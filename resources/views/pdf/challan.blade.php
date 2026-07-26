@@ -9,8 +9,8 @@
         .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 16px; }
         h1 { font-size: 22px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
-        table.items td { padding: 8px 12px; border: 1px solid #e2e8f0; }
+        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.items td { padding: 8px 12px; border: 1px solid #000; }
         .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
         .content-wrapper { position: relative; min-height: 760px; }
         .footer { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
