@@ -485,41 +485,32 @@ class InvoiceController extends Controller
         $whole = (int) floor($amount);
         $decimal = (int) round(($amount - $whole) * 100);
 
-        $ones = [
-            '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-            'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-            'Seventeen', 'Eighteen', 'Nineteen',
-        ];
-        $tens = [
-            '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety',
-        ];
-
         if ($whole === 0) {
             $words = 'Zero';
         } else {
             $words = '';
             if ($whole >= 10000000) {
-                $words .= $ones[(int) floor($whole / 10000000)].' Crore ';
+                $words .= $this->chunkToWords((int) floor($whole / 10000000)).' Crore ';
                 $whole %= 10000000;
             }
             if ($whole >= 100000) {
-                $words .= $ones[(int) floor($whole / 100000)].' Lakh ';
+                $words .= $this->chunkToWords((int) floor($whole / 100000)).' Lakh ';
                 $whole %= 100000;
             }
             if ($whole >= 1000) {
-                $words .= $ones[(int) floor($whole / 1000)].' Thousand ';
+                $words .= $this->chunkToWords((int) floor($whole / 1000)).' Thousand ';
                 $whole %= 1000;
             }
             if ($whole >= 100) {
-                $words .= $ones[(int) floor($whole / 100)].' Hundred ';
+                $words .= $this->chunkToWords((int) floor($whole / 100)).' Hundred ';
                 $whole %= 100;
             }
             if ($whole >= 20) {
-                $words .= $tens[(int) floor($whole / 10)].' ';
+                $words .= $this->getTens((int) floor($whole / 10)).' ';
                 $whole %= 10;
             }
             if ($whole > 0) {
-                $words .= $ones[$whole].' ';
+                $words .= $this->getOnes($whole).' ';
             }
             $words = trim($words).' Taka';
         }
@@ -527,11 +518,11 @@ class InvoiceController extends Controller
         if ($decimal > 0) {
             $decimalWords = '';
             if ($decimal >= 20) {
-                $decimalWords .= $tens[(int) floor($decimal / 10)].' ';
+                $decimalWords .= $this->getTens((int) floor($decimal / 10)).' ';
                 $decimal %= 10;
             }
             if ($decimal > 0) {
-                $decimalWords .= $ones[$decimal];
+                $decimalWords .= $this->getOnes($decimal);
             }
             $words .= ' and '.trim($decimalWords).' Paisa';
         }
@@ -539,5 +530,39 @@ class InvoiceController extends Controller
         $words .= ' Only';
 
         return $words;
+    }
+
+    private function getOnes(int $n): string
+    {
+        $ones = [
+            '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+            'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+            'Seventeen', 'Eighteen', 'Nineteen',
+        ];
+
+        return $ones[$n] ?? '';
+    }
+
+    private function getTens(int $n): string
+    {
+        $tens = [
+            '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety',
+        ];
+
+        return $tens[$n] ?? '';
+    }
+
+    private function chunkToWords(int $n): string
+    {
+        $result = '';
+        if ($n >= 20) {
+            $result .= $this->getTens((int) floor($n / 10)).' ';
+            $n %= 10;
+        }
+        if ($n > 0) {
+            $result .= $this->getOnes($n);
+        }
+
+        return trim($result);
     }
 }

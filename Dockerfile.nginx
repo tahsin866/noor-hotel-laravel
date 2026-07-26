@@ -1,0 +1,5 @@
+FROM noor-hotel-app:latest AS app
+
+FROM nginx:alpine
+
+COPY --from=app /var/www/public /var/www/public

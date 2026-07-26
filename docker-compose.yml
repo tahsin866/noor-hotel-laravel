@@ -1,30 +1,31 @@
 services:
   # Nginx Web Server
   nginx:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
     container_name: noor-hotel-nginx
-    ports:
-      - "8081:80"
     volumes:
-      - .:/var/www
       - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
     depends_on:
       - app
+    restart: always
     networks:
       - noor-hotel-network
+      - bqems-app_bqems-network
 
   # PHP Application
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: tahsin866/noor-hotel-app:latest # <--- Docker Hub Image Path
     container_name: noor-hotel-app
     volumes:
-      - .:/var/www
+      - ./.env:/var/www/.env
     depends_on:
       - postgres
       - redis
+    restart: always
     networks:
       - noor-hotel-network
 
@@ -33,13 +34,14 @@ services:
     image: postgres:16-alpine
     container_name: noor-hotel-postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_DB: noor_hotel
       POSTGRES_USER: nooor
       POSTGRES_PASSWORD: "12345678"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: always
     networks:
       - noor-hotel-network
 
@@ -47,14 +49,15 @@ services:
   redis:
     image: redis:7-alpine
     container_name: noor-hotel-redis
-    ports:
-      - "6379:6379"
+    restart: always
     networks:
       - noor-hotel-network
 
 networks:
   noor-hotel-network:
     driver: bridge
+  bqems-app_bqems-network:
+    external: true
 
 volumes:
   postgres_data:
