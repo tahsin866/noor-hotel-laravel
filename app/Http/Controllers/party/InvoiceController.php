@@ -452,6 +452,8 @@ class InvoiceController extends Controller
 
         $totalInWords = $this->numberToWords($invoice->total_amount);
 
+        $customerPoNumber = $invoice->items->first()?->product->customer_po_number ?? '-';
+
         $data = [
             'invoice' => $invoice,
             'party_name' => $invoice->party->party_name ?? '-',
@@ -459,6 +461,7 @@ class InvoiceController extends Controller
             'items' => $items,
             'challans' => $challans,
             'total_in_words' => $totalInWords,
+            'customer_po_number' => $customerPoNumber,
         ];
 
         if ($request->query('download') === '1') {

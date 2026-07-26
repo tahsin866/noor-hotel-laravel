@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <title>Invoice {{ $invoice->invoice_number }}</title>
     <style>
-        @page { size: A4; margin: 15mm; }
+        @page { size: A4; margin: 10mm; }
         body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
         .header { text-align: center; margin-bottom: 20px; }
         .header h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; }
@@ -44,7 +44,8 @@
             </td>
             <td style="width:40%; text-align:right;">
                 <strong>Invoice Date:</strong> {{ \Carbon\Carbon::parse($invoice->date)->format('d/m/Y') }}<br/>
-                <strong>Ref:</strong> {{ $invoice->invoice_number }}
+                <strong>Ref:</strong> {{ $invoice->invoice_number }}<br/>
+                <strong>Customer PO:</strong> {{ $customer_po_number }}
             </td>
         </tr>
     </table>
@@ -81,25 +82,28 @@
         <div class="in-words"><strong>In Words:</strong> {{ $total_in_words }}</div>
     </div>
 
-    <div style="position:fixed;bottom:15mm;left:15mm;right:15mm;">
-        <table style="width:100%;border:none;">
+    <div style="position:fixed;bottom:10mm;left:10mm;right:10mm;">
+        <table style="width:100%;border:none;font-size:12px;">
             <tr>
-                <td style="width:45%;border:none;text-align:center;padding:0;">
-                    <div style="height:40px;"></div>
-                    <div style="border-top:1px solid #1e293b;"></div>
-                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
+                <td style="width:55%;border:none;vertical-align:top;">
+                    <strong style="font-size:13px;">Payment Method</strong><br/>
+                    <strong>Bank Name:</strong> BRAC BANK<br/>
+                    <strong>A/C Name:</strong> NOOR HOTEL AND RESTAURANT<br/>
+                    <strong>Account Number:</strong> 2078277570001<br/>
+                    <strong>Swift Code:</strong> BRAKBDDH<br/>
+                    <strong>Routing No:</strong> 060220259<br/>
+                    Court Bazar Sub-Branch
                 </td>
-                <td style="width:10%;border:none;"></td>
-                <td style="width:45%;border:none;text-align:center;padding:0;">
-                    <div style="height:40px;"></div>
-                    <div style="border-top:1px solid #1e293b;"></div>
-                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
+                <td style="width:45%;border:none;text-align:right;vertical-align:top;">
+                    <div style="border-top:1px solid #1e293b;width:200px;display:inline-block;"></div>
+                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Mohammod</div>
+                    <div style="font-size:11px;">Noor Hotel & Restaurant</div>
+                    <div style="font-size:11px;">Marketing Manager</div>
                 </td>
             </tr>
         </table>
-        <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding:8px 0;">
-            Generated on {{ now()->format('d/m/Y') }} &mdash; Noor Hotel PRG
-        </div>
+        <div style="text-align:center;font-size:18px;font-weight:bold;margin-top:10px;">Thank you for your business!</div>
     </div>
-</body>
+
+    </body>
 </html>
