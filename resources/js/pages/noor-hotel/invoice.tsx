@@ -307,19 +307,20 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 return;
             }
 
-            let prevProduct = '';
             let sl = 0;
             let itemRows = '';
             if (d.items) {
-                d.items.forEach((it: InvoiceItem, i: number) => {
-                    const isNewProduct = it.product_name !== prevProduct;
-                    prevProduct = it.product_name;
-                    if (isNewProduct && i > 0) {
-                        itemRows += `<tr style="background:#f8fafc;">
-                            <td colspan="4" style="border:1px solid #000;padding:4px 12px;font-size:11px;color:#475569;"></td>
-                            <td style="border:1px solid #000;padding:4px 12px;text-align:right;font-size:11px;font-weight:bold;">Tk ${fmtPrice(it.total)}</td>
-                        </tr>`;
+                const grouped: Record<string, InvoiceItem> = {};
+                d.items.forEach((it: InvoiceItem) => {
+                    const key = `${it.product_name}_${it.meal_type}_${it.unit_price}`;
+                    if (!grouped[key]) {
+                        grouped[key] = { ...it, quantity: 0, vat_amount: 0, total: 0 };
                     }
+                    grouped[key].quantity += it.quantity;
+                    grouped[key].vat_amount += it.vat_amount;
+                    grouped[key].total += it.total;
+                });
+                Object.values(grouped).forEach((it: InvoiceItem) => {
                     sl++;
                     itemRows += `<tr>
                         <td style="padding:8px 12px;border:1px solid #000;font-size:12px;">${sl}</td>
@@ -330,12 +331,6 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                         <td style="padding:8px 12px;border:1px solid #000;text-align:right;font-weight:bold;">Tk ${fmtPrice(it.total)}</td>
                     </tr>`;
                 });
-                if (d.items.length > 0) {
-                    itemRows += `<tr style="background:#f1f5f9;">
-                        <td colspan="5" style="border:1px solid #000;padding:6px 12px;font-size:12px;font-weight:bold;text-align:right;">Grand Total:</td>
-                        <td style="border:1px solid #000;padding:6px 12px;text-align:right;font-size:14px;font-weight:bold;">Tk ${fmtPrice(d.total_amount)}</td>
-                    </tr>`;
-                }
             }
 
             const dateStr = d.date ? new Date(d.date).toLocaleDateString('en-GB') : '—';
