@@ -69,6 +69,7 @@ type ChlItem = {
     unit_price: number;
     product_name: string;
     meal_type: string;
+    description?: string;
 };
 
 type Challan = {
@@ -628,7 +629,106 @@ export default function Challans({ products, parties }: { products: Product[]; p
     };
 
     const printChallan = async (id: number) => {
-        window.open(`/api/challans/${id}/print`, '_blank');
+        try {
+            const res = await fetch(`/api/challans/${id}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const c = data.data;
+            if (!c) {
+                toast.error('Failed to load challan');
+                return;
+            }
+
+                            const rows = (c.items || [])
+                .map(
+                    (it: ChlItem, i: number) =>
+                        `<tr>
+                            <td style="padding:8px 12px;border:1px solid #000;text-align:center;">${i + 1}</td>
+                            <td style="padding:8px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
+                            <td style="padding:8px 12px;border:1px solid #000;text-align:left;">${it.meal_type.charAt(0).toUpperCase() + it.meal_type.slice(1)}</td>
+                            <td style="padding:8px 12px;border:1px solid #000;text-align:center;">${it.quantity}</td>
+                        </tr>`,
+                )
+                .join('');
+
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Challan ${c.challan_number}</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
+        h1 { font-size: 22px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; text-align: center; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
+        .content-wrapper { position: relative; min-height: 760px; }
+        .footer { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+        .signatures { position: absolute; bottom: 30px; left: 0; right: 0; }
+    </style>
+</head>
+<body>
+    <div class="content-wrapper">
+        <h1>DELIVERY CHALLAN</h1>
+        <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
+            <tr>
+                <td style="width:50%;border:none;padding:4px 0;"><strong>Challan No:</strong> ${c.challan_number}</td>
+                <td style="width:50%;border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
+            </tr>
+            <tr>
+                <td style="border:none;padding:4px 0;"><strong>PO:</strong> ${c.po_number || '—'}</td>
+                <td style="border:none;padding:4px 0;text-align:right;"><strong>Product:</strong> ${c.product_name || '—'}</td>
+            </tr>
+            <tr>
+                <td style="border:none;padding:4px 0;"><strong>Party:</strong> ${c.party_name || '—'}</td>
+            </tr>
+            ${c.address ? `<tr><td colspan="2" style="border:none;padding:4px 0;width:100%;"><strong>Address:</strong> ${c.address}</td></tr>` : ''}
+        </table>
+        <table class="items">
+            <thead>
+                <tr>
+                    <th style="width:40px;">SL</th>
+                    <th>Product / Item</th>
+                    <th style="width:80px;text-align:left;">Meal</th>
+                    <th style="width:80px;text-align:center;">Qty</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+        ${c.notes ? `<div class="notes"><strong>Notes:</strong> ${c.notes}</div>` : ''}
+        <div class="signatures">
+            <table style="width:100%;border:none;">
+                <tr>
+                    <td style="width:45%;border:none;text-align:center;padding:0;">
+                        <div style="height:40px;"></div>
+                        <div style="border-top:1px solid #1e293b;"></div>
+                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
+                    </td>
+                    <td style="width:10%;border:none;"></td>
+                    <td style="width:45%;border:none;text-align:center;padding:0;">
+                        <div style="height:40px;"></div>
+                        <div style="border-top:1px solid #1e293b;"></div>
+                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div class="footer">Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; Noor Hotel PRG</div>
+    </div>
+</body>
+</html>`;
+
+            const win = window.open('', '_blank');
+            if (win) {
+                win.document.write(html);
+                win.document.close();
+                win.focus();
+                win.print();
+            }
+        } catch {
+            toast.error('Failed to load challan');
+        }
     };
 
     const totalPages = Math.ceil(total / 10);

@@ -73,11 +73,29 @@ class InvoiceController extends Controller
             'challans.items.productMeal',
         ])->findOrFail($id);
 
-        $items = $invoice->items->map(function ($item) {
+        $descMap = [];
+        foreach ($invoice->challans as $challan) {
+            foreach ($challan->items as $ci) {
+                $pm = $ci->productMeal;
+                if (! $pm) {
+                    continue;
+                }
+                $dKey = ($pm->product_id ?? '').'_'.$pm->meal_type.'_'.rtrim(rtrim(number_format((float) $ci->unit_price, 2, '.', ''), '0'), '.');
+                if (! isset($descMap[$dKey])) {
+                    $descMap[$dKey] = $pm->description ?? $pm->product->name ?? '-';
+                }
+            }
+        }
+
+        $items = $invoice->items->map(function ($item) use ($descMap) {
+            $key = $item->product_id.'_'.$item->meal_type.'_'.rtrim(rtrim(number_format((float) $item->unit_price, 2, '.', ''), '0'), '.');
+            $description = $descMap[$key] ?? ($item->product->name ?? '-');
+
             return [
                 'id' => $item->id,
                 'product_id' => $item->product_id,
                 'product_name' => $item->product->name ?? '-',
+                'description' => $description,
                 'meal_type' => $item->meal_type,
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
@@ -501,12 +519,20 @@ class InvoiceController extends Controller
         if ($request->query('download') === '1') {
             $pdf = Pdf::loadView('pdf.invoice', $data);
             $pdf->setPaper('a4');
+            $pdf->setOption('margin-top', 10);
+            $pdf->setOption('margin-bottom', 10);
+            $pdf->setOption('margin-left', 10);
+            $pdf->setOption('margin-right', 10);
 
             return $pdf->download(str_replace('/', '-', $invoice->invoice_number).'.pdf');
         }
 
         $pdf = Pdf::loadView('pdf.invoice', $data);
         $pdf->setPaper('a4');
+        $pdf->setOption('margin-top', 10);
+        $pdf->setOption('margin-bottom', 10);
+        $pdf->setOption('margin-left', 10);
+        $pdf->setOption('margin-right', 10);
 
         return $pdf->stream(str_replace('/', '-', $invoice->invoice_number).'.pdf');
     }

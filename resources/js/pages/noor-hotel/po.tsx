@@ -456,8 +456,135 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         setDeleteOpen(true);
     };
 
-    const printPo = (product: Product) => {
-        window.open(`/api/products/${product.id}/print`, '_blank');
+    const printPo = async (product: Product) => {
+        try {
+            const res = await fetch(`/api/products/${product.id}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const p = data.data || data.product || data;
+            if (!p) {
+                toast.error('Failed to load product');
+                return;
+            }
+
+            const meals = p.meals || [];
+            const subtotal = meals.reduce((s: number, m: ProductMeal) => s + (m.quantity * m.unit_price), 0);
+            const vatRate = p.vat_rate || 0;
+            const vat = subtotal * vatRate / 100;
+            const total = subtotal + vat;
+
+            const itemRows = meals
+                .map((m: ProductMeal, i: number) => {
+                    const lineTotal = m.quantity * m.unit_price;
+                    const remaining = Math.max(0, m.quantity - (m.delivered_quantity || 0));
+                    return `<tr>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;">${i + 1}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-transform:capitalize;">${m.meal_type}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${m.quantity}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">Tk ${Number(m.unit_price).toFixed(2)}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;">Tk ${lineTotal.toFixed(2)}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${m.delivered_quantity || 0}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${remaining}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;">${m.description || '-'}</td>
+                    </tr>`;
+                })
+                .join('');
+
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Purchase Order ${p.code}</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
+        h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; text-align: center; }
+        .underline { border-bottom: 3px solid #2563eb; width: 200px; margin: 6px auto 0; }
+        .sub { color: #64748b; margin: 4px 0 0; font-size: 12px; text-align: center; }
+        table.info { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+        table.info td { border: none; padding: 4px 0; vertical-align: top; }
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.items td { padding: 8px 12px; border: 1px solid #e2e8f0; }
+        .totals { text-align: right; font-size: 14px; margin-top: 12px; }
+        .totals div { margin-bottom: 4px; }
+        .totals .grand { font-size: 16px; border-top: 2px solid #e2e8f0; padding-top: 6px; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <div style="text-align:center;margin-bottom:20px;">
+        <h1>PURCHASE ORDER</h1>
+        <div class="underline"></div>
+        <p class="sub">Noor Hotel PRG</p>
+    </div>
+    <table class="info">
+        <tr>
+            <td style="width:60%;">
+                <strong>Party:</strong> ${p.party_name || '-'}<br/>
+                <strong>PO Code:</strong> ${p.code}<br/>
+                <strong>Customer PO:</strong> ${p.customer_po_number || 'N/A'}
+            </td>
+            <td style="width:40%;text-align:right;">
+                <strong>Date:</strong> ${new Date().toLocaleDateString('en-GB')}<br/>
+                <strong>Unit:</strong> ${p.unit}<br/>
+                <strong>VAT Rate:</strong> ${vatRate}%
+            </td>
+        </tr>
+    </table>
+    ${p.description ? `<div style="margin-bottom:16px;"><span style="color:#64748b;font-weight:600;">Description:</span><p style="margin:4px 0">${p.description}</p></div>` : ''}
+    <table class="items">
+        <thead>
+            <tr>
+                <th style="width:40px;">#</th>
+                <th>Meal Type</th>
+                <th style="width:80px;text-align:center;">Ordered</th>
+                <th style="width:100px;text-align:right;">Unit Price</th>
+                <th style="width:100px;text-align:right;">Amount</th>
+                <th style="width:80px;text-align:center;">Delivered</th>
+                <th style="width:80px;text-align:center;">Remaining</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+    </table>
+    <div class="totals">
+        <div>Subtotal: <strong>Tk ${subtotal.toFixed(2)}</strong></div>
+        <div>VAT (${vatRate}%): <strong>Tk ${vat.toFixed(2)}</strong></div>
+        <div class="grand">Total (inc. VAT): <strong>Tk ${total.toFixed(2)}</strong></div>
+    </div>
+    <div style="position:fixed;bottom:15mm;left:15mm;right:15mm;">
+        <table style="width:100%;border:none;">
+            <tr>
+                <td style="width:45%;border:none;text-align:center;padding:0;">
+                    <div style="height:40px;"></div>
+                    <div style="border-top:1px solid #1e293b;"></div>
+                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
+                </td>
+                <td style="width:10%;border:none;"></td>
+                <td style="width:45%;border:none;text-align:center;padding:0;">
+                    <div style="height:40px;"></div>
+                    <div style="border-top:1px solid #1e293b;"></div>
+                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Approved By</div>
+                </td>
+            </tr>
+        </table>
+        <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding:8px 0;">
+            Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; Noor Hotel PRG
+        </div>
+    </div>
+</body>
+</html>`;
+
+            const win = window.open('', '_blank');
+            if (win) {
+                win.document.write(html);
+                win.document.close();
+                win.focus();
+                win.print();
+            }
+        } catch {
+            toast.error('Failed to load product');
+        }
     };
 
     const emailPo = (product: Product) => {

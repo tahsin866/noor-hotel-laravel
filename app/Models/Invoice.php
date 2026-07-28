@@ -74,7 +74,7 @@ class Invoice extends Model
                     [strlen($prefix) + 1, $prefix.'%']
                 );
 
-                $next = ($last[0]->max_num ?? 0) + 1;
+                $next = max(($last[0]->max_num ?? 0) + 1, 450);
                 $model->invoice_number = $prefix.str_pad($next, 4, '0', STR_PAD_LEFT);
             }
         });

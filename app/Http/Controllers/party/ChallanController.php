@@ -88,6 +88,7 @@ class ChallanController extends Controller
                 'unit_price' => $item->unit_price,
                 'product_name' => $item->productMeal->product->name ?? '-',
                 'meal_type' => $item->productMeal->meal_type ?? '-',
+                'description' => $item->productMeal->description ?? '-',
             ];
         });
 
@@ -280,15 +281,16 @@ class ChallanController extends Controller
             'items' => $items,
         ];
 
-        if ($request->query('download') === '1') {
-            $pdf = Pdf::loadView('pdf.challan', $data);
-            $pdf->setPaper('a4');
-
-            return $pdf->download(str_replace('/', '-', $challan->challan_number).'.pdf');
-        }
-
         $pdf = Pdf::loadView('pdf.challan', $data);
         $pdf->setPaper('a4');
+        $pdf->setOption('margin-top', 15);
+        $pdf->setOption('margin-bottom', 15);
+        $pdf->setOption('margin-left', 15);
+        $pdf->setOption('margin-right', 15);
+
+        if ($request->query('download') === '1') {
+            return $pdf->download(str_replace('/', '-', $challan->challan_number).'.pdf');
+        }
 
         return $pdf->stream(str_replace('/', '-', $challan->challan_number).'.pdf');
     }
@@ -327,15 +329,16 @@ class ChallanController extends Controller
 
         $data = ['challans' => $challansData];
 
-        if ($request->query('download') === '1') {
-            $pdf = Pdf::loadView('pdf.challan_batch', $data);
-            $pdf->setPaper('a4');
-
-            return $pdf->download('challans-batch.pdf');
-        }
-
         $pdf = Pdf::loadView('pdf.challan_batch', $data);
         $pdf->setPaper('a4');
+        $pdf->setOption('margin-top', 15);
+        $pdf->setOption('margin-bottom', 15);
+        $pdf->setOption('margin-left', 15);
+        $pdf->setOption('margin-right', 15);
+
+        if ($request->query('download') === '1') {
+            return $pdf->download('challans-batch.pdf');
+        }
 
         return $pdf->stream('challans-batch.pdf');
     }

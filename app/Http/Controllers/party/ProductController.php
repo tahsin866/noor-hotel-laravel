@@ -197,12 +197,20 @@ class ProductController extends Controller
         if ($request->query('download') === '1') {
             $pdf = Pdf::loadView('pdf.po', $data);
             $pdf->setPaper('a4');
+            $pdf->setOption('margin-top', 15);
+            $pdf->setOption('margin-bottom', 15);
+            $pdf->setOption('margin-left', 15);
+            $pdf->setOption('margin-right', 15);
 
             return $pdf->download('po-'.$product->code.'.pdf');
         }
 
         $pdf = Pdf::loadView('pdf.po', $data);
         $pdf->setPaper('a4');
+        $pdf->setOption('margin-top', 15);
+        $pdf->setOption('margin-bottom', 15);
+        $pdf->setOption('margin-left', 15);
+        $pdf->setOption('margin-right', 15);
 
         return $pdf->stream('po-'.$product->code.'.pdf');
     }

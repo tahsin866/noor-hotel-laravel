@@ -67,6 +67,7 @@ type Challan = {
 type InvoiceItem = {
     id: number;
     product_name: string;
+    description?: string;
     meal_type?: string;
     quantity: number;
     unit_price: number;
@@ -289,8 +290,164 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         }
     };
 
+    function fmtPrice(n: number | string) {
+        const val = parseFloat(String(n || 0));
+        return Number.isInteger(val) ? val.toLocaleString('en-US') : val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
     const printInvoice = async (id: number) => {
-        window.open(`/api/invoices/${id}/print`, '_blank');
+        try {
+            const res = await fetch(`/api/invoices/${id}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const d = data.data;
+            if (!d) {
+                toast.error('Failed to load invoice');
+                return;
+            }
+
+            let prevProduct = '';
+            let sl = 0;
+            let itemRows = '';
+            if (d.items) {
+                d.items.forEach((it: InvoiceItem, i: number) => {
+                    const isNewProduct = it.product_name !== prevProduct;
+                    prevProduct = it.product_name;
+                    if (isNewProduct && i > 0) {
+                        itemRows += `<tr style="background:#f8fafc;">
+                            <td colspan="4" style="border:1px solid #000;padding:4px 12px;font-size:11px;color:#475569;"></td>
+                            <td style="border:1px solid #000;padding:4px 12px;text-align:right;font-size:11px;font-weight:bold;">Tk ${fmtPrice(it.total)}</td>
+                        </tr>`;
+                    }
+                    sl++;
+                    itemRows += `<tr>
+                        <td style="padding:8px 12px;border:1px solid #000;font-size:12px;">${sl}</td>
+                        <td style="padding:8px 12px;border:1px solid #000;white-space:pre-line;font-size:12px;">${it.description || it.product_name}</td>
+                        <td style="padding:8px 12px;border:1px solid #000;text-align:left;text-transform:capitalize;">${it.meal_type || '-'}</td>
+                        <td style="padding:8px 12px;border:1px solid #000;text-align:center;">${it.quantity}</td>
+                        <td style="padding:8px 12px;border:1px solid #000;text-align:right;">Tk ${fmtPrice(it.unit_price)}</td>
+                        <td style="padding:8px 12px;border:1px solid #000;text-align:right;font-weight:bold;">Tk ${fmtPrice(it.total)}</td>
+                    </tr>`;
+                });
+                if (d.items.length > 0) {
+                    itemRows += `<tr style="background:#f1f5f9;">
+                        <td colspan="5" style="border:1px solid #000;padding:6px 12px;font-size:12px;font-weight:bold;text-align:right;">Grand Total:</td>
+                        <td style="border:1px solid #000;padding:6px 12px;text-align:right;font-size:14px;font-weight:bold;">Tk ${fmtPrice(d.total_amount)}</td>
+                    </tr>`;
+                }
+            }
+
+            const dateStr = d.date ? new Date(d.date).toLocaleDateString('en-GB') : '—';
+
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Invoice ${d.invoice_number}</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; }
+        table.info { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+        table.info td { border: none; padding: 4px 0; vertical-align: top; }
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.items td { padding: 8px 12px; border: 1px solid #000; }
+        .totals { text-align: right; font-size: 14px; margin-top: 12px; }
+        .totals div { margin-bottom: 4px; }
+        .totals .grand { font-size: 16px; border-top: 2px solid #e2e8f0; padding-top: 6px; margin-top: 6px; }
+        .totals .in-words { text-align: left; margin-top: 8px; font-size: 12px; color: #475569; }
+        .footer { position: fixed; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding: 8px 15mm; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>INVOICE</h1>
+    </div>
+    <table class="info">
+        <tr>
+            <td style="width:60%;">
+                <strong>Invoice to:</strong><br/><br/>
+                ${d.party_name || 'N/A'}<br/><br/>
+            </td>
+            <td style="width:40%;text-align:right;">
+                <div style="display:inline-block;text-align:left;margin-top:4px;">
+                    <strong>Invoice Date:</strong> ${dateStr}<br/><br/>
+                    <strong>Ref:</strong> ${d.invoice_number}<br/><br/>
+                    <strong>Customer PO:</strong> ${d.customer_po_number || '-'}
+                </div>
+            </td>
+        </tr>
+    </table>
+    <table class="items">
+        <thead>
+            <tr>
+                <th style="width:40px;">SL</th>
+                <th>Product / Item</th>
+                <th style="width:80px;text-align:left;">Meal</th>
+                <th style="width:70px;text-align:center;">Qty</th>
+                <th style="width:100px;text-align:right;">Unit Price</th>
+                <th style="width:100px;text-align:right;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+    </table>
+    <div class="totals">
+        <table style="border:none;font-size:14px;margin-left:auto;">
+            <tr>
+                <td style="border:none;padding:4px 10px 4px 0;text-align:right;">Subtotal:</td>
+                <td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk ${fmtPrice(d.subtotal || 0)}</strong></td>
+            </tr>
+            <tr>
+                <td style="border:none;padding:4px 10px 4px 0;text-align:right;">VAT:</td>
+                <td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk ${fmtPrice(d.total_vat || 0)}</strong></td>
+            </tr>
+            <tr>
+                <td style="border:none;padding:4px 10px 4px 0;text-align:right;border-top:2px solid #e2e8f0;">Grand Total:</td>
+                <td style="border:none;padding:4px 0;text-align:right;border-top:2px solid #e2e8f0;white-space:nowrap;font-size:16px;"><strong>Tk ${fmtPrice(d.total_amount)}</strong></td>
+            </tr>
+        </table>
+    </div>
+    <div style="position:fixed;bottom:10mm;left:10mm;right:10mm;">
+        <table style="width:100%;border:none;font-size:12px;">
+            <tr>
+                <td style="width:55%;border:none;vertical-align:top;">
+                    <strong style="font-size:13px;">Payment Method</strong><br/>
+                    <table style="border:none;font-size:12px;margin-top:4px;">
+                        <tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Bank Name:</strong></td><td style="border:none;padding:1px 0;">BRAC BANK</td></tr>
+                        <tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>A/C Name:</strong></td><td style="border:none;padding:1px 0;">NOOR HOTEL AND RESTAURANT</td></tr>
+                        <tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Account Number:</strong></td><td style="border:none;padding:1px 0;">2078277570001</td></tr>
+                        <tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Swift Code:</strong></td><td style="border:none;padding:1px 0;">BRAKBDDH</td></tr>
+                        <tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Routing No:</strong></td><td style="border:none;padding:1px 0;">060220259</td></tr>
+                        <tr><td style="border:none;padding:1px 8px 1px 0;">&nbsp;</td><td style="border:none;padding:1px 0;">Court Bazar Sub-Branch</td></tr>
+                    </table>
+                </td>
+                <td style="width:45%;border:none;text-align:right;vertical-align:top;">
+                    <div style="border-top:1px solid #1e293b;width:200px;display:inline-block;"></div>
+                    <div style="display:inline-block;text-align:left;padding-top:6px;">
+                        <div style="font-weight:bold;font-size:12px;">Mohammod</div>
+                        <div style="font-size:11px;">Noor Hotel &amp; Restaurant</div>
+                        <div style="font-size:11px;">Marketing Manager</div>
+                    </div>
+                </td>
+            </tr>
+        </table>
+        <div style="text-align:center;font-size:18px;font-weight:bold;margin-top:10px;">Thank you for your business!</div>
+    </div>
+</body>
+</html>`;
+
+            const win = window.open('', '_blank');
+            if (win) {
+                win.document.write(html);
+                win.document.close();
+                win.focus();
+                win.print();
+            }
+        } catch {
+            toast.error('Failed to load invoice');
+        }
     };
 
     const printSelectedInvoices = async () => {
