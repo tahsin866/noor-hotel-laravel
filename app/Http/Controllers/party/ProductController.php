@@ -80,9 +80,14 @@ class ProductController extends Controller
             }
         }
 
+        $product->load(['meals', 'party:id,party_name']);
+        $product->party_name = $product->party->party_name ?? null;
+        $product->total_ordered = $product->meals->sum('quantity');
+        $product->total_delivered = $product->meals->sum('delivered_quantity');
+
         return response()->json([
             'message' => 'PO created successfully.',
-            'product' => $product->load('meals'),
+            'product' => $product,
         ], 201);
     }
 
@@ -120,17 +125,32 @@ class ProductController extends Controller
         unset($validated['meals']);
 
         $product->update($validated);
-        $product->meals()->delete();
 
-        foreach ($meals as $meal) {
-            if (($meal['quantity'] ?? 0) > 0 || ($meal['unit_price'] ?? 0) > 0) {
-                $product->meals()->create($meal);
+        $existingMeals = $product->meals()->get();
+        $mealsToKeep = [];
+
+        foreach ($meals as $index => $meal) {
+            if (($meal['quantity'] ?? 0) <= 0 && ($meal['unit_price'] ?? 0) <= 0) {
+                continue;
+            }
+            if (isset($existingMeals[$index])) {
+                $existingMeals[$index]->update($meal);
+                $mealsToKeep[] = $existingMeals[$index]->id;
+            } else {
+                $new = $product->meals()->create($meal);
+                $mealsToKeep[] = $new->id;
             }
         }
 
+        $product->meals()->whereNotIn('id', $mealsToKeep)->delete();
+
+        $product->load(['meals', 'party:id,party_name']);
+        $product->total_ordered = $product->meals->sum('quantity');
+        $product->total_delivered = $product->meals->sum('delivered_quantity');
+
         return response()->json([
             'message' => 'PO updated successfully.',
-            'product' => $product->load('meals'),
+            'product' => $product,
         ]);
     }
 
@@ -181,12 +201,9 @@ class ProductController extends Controller
             return $pdf->download('po-'.$product->code.'.pdf');
         }
 
-        $content = view('pdf.po', $data)->render();
+        $pdf = Pdf::loadView('pdf.po', $data);
+        $pdf->setPaper('a4');
 
-        return view('pdf.print-layout', [
-            'title' => 'Purchase Order '.$product->code,
-            'content' => $content,
-            'downloadUrl' => url()->current().'?download=1',
-        ]);
+        return $pdf->stream('po-'.$product->code.'.pdf');
     }
 }

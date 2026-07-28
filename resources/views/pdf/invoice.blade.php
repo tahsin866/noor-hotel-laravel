@@ -8,7 +8,6 @@
         body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
         .header { text-align: center; margin-bottom: 20px; }
         .header h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; }
-        .header .underline { border-bottom: 3px solid #2563eb; width: 200px; margin: 6px auto 0; }
         table.info { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
         table.info td { border: none; padding: 4px 0; vertical-align: top; }
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
@@ -30,22 +29,23 @@
 
     <div class="header">
         <h1>INVOICE</h1>
-        <div class="underline"></div>
     </div>
 
     <table class="info">
         <tr>
             <td style="width:60%;">
-                <strong>Invoice to:</strong><br/>
-                {{ $party_name }}<br/>
+                <strong>Invoice to:</strong><br/><br/>
+                {{ $party_name }}<br/><br/>
                 @if($party_address)
                     {{ $party_address }}<br/>
                 @endif
             </td>
             <td style="width:40%; text-align:right;">
-                <strong>Invoice Date:</strong> {{ \Carbon\Carbon::parse($invoice->date)->format('d/m/Y') }}<br/>
-                <strong>Ref:</strong> {{ $invoice->invoice_number }}<br/>
-                <strong>Customer PO:</strong> {{ $customer_po_number }}
+                <div style="display:inline-block; text-align:left; margin-top:4px;">
+                    <strong>Invoice Date:</strong> {{ \Carbon\Carbon::parse($invoice->date)->format('d/m/Y') }}<br/><br/>
+                    <strong>Ref:</strong> {{ $invoice->invoice_number }}<br/><br/>
+                    <strong>Customer PO:</strong> {{ $customer_po_number }}
+                </div>
             </td>
         </tr>
     </table>
@@ -53,7 +53,7 @@
     <table class="items">
         <thead>
             <tr>
-                <th style="width:40px;">#</th>
+                <th style="width:40px;">SL</th>
                 <th>Product / Item</th>
                 <th style="width:70px;text-align:left;">Meal</th>
                 <th style="width:70px;text-align:center;">Qty</th>
@@ -76,9 +76,20 @@
     </table>
 
     <div class="totals">
-        <div>Subtotal: <strong>Tk {{ fmtPrice($invoice->subtotal) }}</strong></div>
-        <div>VAT: <strong>Tk {{ fmtPrice($invoice->total_vat) }}</strong></div>
-        <div class="grand">Grand Total: <strong>Tk {{ fmtPrice($invoice->total_amount) }}</strong></div>
+        <table style="border:none;font-size:14px;margin-left:auto;">
+            <tr>
+                <td style="border:none;padding:4px 10px 4px 0;text-align:right;">Subtotal:</td>
+                <td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk {{ fmtPrice($invoice->subtotal) }}</strong></td>
+            </tr>
+            <tr>
+                <td style="border:none;padding:4px 10px 4px 0;text-align:right;">VAT:</td>
+                <td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk {{ fmtPrice($invoice->total_vat) }}</strong></td>
+            </tr>
+            <tr>
+                <td style="border:none;padding:4px 10px 4px 0;text-align:right;border-top:2px solid #e2e8f0;">Grand Total:</td>
+                <td style="border:none;padding:4px 0;text-align:right;border-top:2px solid #e2e8f0;white-space:nowrap;font-size:16px;"><strong>Tk {{ fmtPrice($invoice->total_amount) }}</strong></td>
+            </tr>
+        </table>
         <div class="in-words"><strong>In Words:</strong> {{ $total_in_words }}</div>
     </div>
 
@@ -87,18 +98,40 @@
             <tr>
                 <td style="width:55%;border:none;vertical-align:top;">
                     <strong style="font-size:13px;">Payment Method</strong><br/>
-                    <strong>Bank Name:</strong> BRAC BANK<br/>
-                    <strong>A/C Name:</strong> NOOR HOTEL AND RESTAURANT<br/>
-                    <strong>Account Number:</strong> 2078277570001<br/>
-                    <strong>Swift Code:</strong> BRAKBDDH<br/>
-                    <strong>Routing No:</strong> 060220259<br/>
-                    Court Bazar Sub-Branch
+                    <table style="border:none;font-size:12px;margin-top:4px;">
+                        <tr>
+                            <td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Bank Name:</strong></td>
+                            <td style="border:none;padding:1px 0;">BRAC BANK</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>A/C Name:</strong></td>
+                            <td style="border:none;padding:1px 0;">NOOR HOTEL AND RESTAURANT</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Account Number:</strong></td>
+                            <td style="border:none;padding:1px 0;">2078277570001</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Swift Code:</strong></td>
+                            <td style="border:none;padding:1px 0;">BRAKBDDH</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Routing No:</strong></td>
+                            <td style="border:none;padding:1px 0;">060220259</td>
+                        </tr>
+                        <tr>
+                            <td style="border:none;padding:1px 8px 1px 0;">&nbsp;</td>
+                            <td style="border:none;padding:1px 0;">Court Bazar Sub-Branch</td>
+                        </tr>
+                    </table>
                 </td>
                 <td style="width:45%;border:none;text-align:right;vertical-align:top;">
                     <div style="border-top:1px solid #1e293b;width:200px;display:inline-block;"></div>
-                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Mohammod</div>
-                    <div style="font-size:11px;">Noor Hotel & Restaurant</div>
-                    <div style="font-size:11px;">Marketing Manager</div>
+                    <div style="display:inline-block; text-align:left; padding-top:6px;">
+                        <div style="font-weight:bold;font-size:12px;">Mohammod</div>
+                        <div style="font-size:11px;">Noor Hotel & Restaurant</div>
+                        <div style="font-size:11px;">Marketing Manager</div>
+                    </div>
                 </td>
             </tr>
         </table>

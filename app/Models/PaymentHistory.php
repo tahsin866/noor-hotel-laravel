@@ -18,6 +18,10 @@ class PaymentHistory extends Model
         'payment_method',
         'reference_number',
         'notes',
+        'payment_status',
+        'customer_bank_name',
+        'user_bank_name',
+        'attachment',
     ];
 
     protected $casts = [

@@ -284,16 +284,13 @@ class ChallanController extends Controller
             $pdf = Pdf::loadView('pdf.challan', $data);
             $pdf->setPaper('a4');
 
-            return $pdf->download('challan-'.$challan->challan_number.'.pdf');
+            return $pdf->download(str_replace('/', '-', $challan->challan_number).'.pdf');
         }
 
-        $content = view('pdf.challan', $data)->render();
+        $pdf = Pdf::loadView('pdf.challan', $data);
+        $pdf->setPaper('a4');
 
-        return view('pdf.print-layout', [
-            'title' => 'Challan '.$challan->challan_number,
-            'content' => $content,
-            'downloadUrl' => url()->current().'?download=1',
-        ]);
+        return $pdf->stream(str_replace('/', '-', $challan->challan_number).'.pdf');
     }
 
     public function printBatch(Request $request)
@@ -337,12 +334,9 @@ class ChallanController extends Controller
             return $pdf->download('challans-batch.pdf');
         }
 
-        $content = view('pdf.challan_batch', $data)->render();
+        $pdf = Pdf::loadView('pdf.challan_batch', $data);
+        $pdf->setPaper('a4');
 
-        return view('pdf.print-layout', [
-            'title' => 'Challans Batch Print',
-            'content' => $content,
-            'downloadUrl' => url()->current().'?'.http_build_query(array_merge($request->query(), ['download' => '1'])),
-        ]);
+        return $pdf->stream('challans-batch.pdf');
     }
 }

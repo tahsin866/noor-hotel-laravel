@@ -726,7 +726,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                 className="h-7 text-xs"
                                 onClick={async () => {
                                     try {
-                                        const res = await fetch('/api/challans/print-batch', {
+                                        const res = await fetch(`/api/challans/print-batch?download=1`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                                             body: JSON.stringify({ ids: Array.from(selectedIds) }),
@@ -734,7 +734,11 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                         if (res.ok) {
                                             const blob = await res.blob();
                                             const url = window.URL.createObjectURL(blob);
-                                            window.open(url, '_blank');
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = 'challans-batch.pdf';
+                                            a.click();
+                                            window.URL.revokeObjectURL(url);
                                         } else {
                                             toast.error('Failed to print challans');
                                         }

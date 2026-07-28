@@ -362,7 +362,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
 
     const [name, setName] = useState('');
     const [unit, setUnit] = useState('');
-    const [vatRate, setVatRate] = useState('15');
+    const [vatRate, setVatRate] = useState('10');
     const [partyId, setPartyId] = useState('');
     const [customerPoNumber, setCustomerPoNumber] = useState('');
     const [description, setDescription] = useState('');
@@ -469,7 +469,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
     const buildBody = () => ({
         name,
         unit,
-        vat_rate: parseFloat(vatRate || '15'),
+        vat_rate: parseFloat(vatRate || '10'),
         party_id: partyId ? parseInt(partyId) : null,
         customer_po_number: customerPoNumber || null,
         description: description || null,
@@ -490,7 +490,10 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                 toast.success(data.message);
                 setCreateOpen(false);
                 resetForm();
-                fetchProducts();
+                if (page === 1) {
+                    setProducts((prev) => [data.product, ...prev].slice(0, 10));
+                }
+                setTotal((prev) => prev + 1);
             } else if (res.status === 422) {
                 setErrors(data.errors || {});
             } else {
@@ -518,7 +521,9 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                 toast.success(data.message);
                 setEditOpen(false);
                 resetForm();
-                fetchProducts();
+                setProducts((prev) =>
+                    prev.map((p) => (p.id === editingProduct.id ? { ...p, ...data.product } : p))
+                );
             } else if (res.status === 422) {
                 setErrors(data.errors || {});
             } else {
@@ -544,7 +549,14 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                 toast.success(data.message);
                 setDeleteOpen(false);
                 setDeletingProduct(null);
-                fetchProducts();
+                setProducts((prev) => prev.filter((p) => p.id !== deletingProduct.id));
+                setTotal((prev) => {
+                    const next = Math.max(0, prev - 1);
+                    return next;
+                });
+                if (products.length === 1 && page > 1) {
+                    setPage((p) => p - 1);
+                }
             } else {
                 toast.error(data.message || 'Something went wrong.');
             }

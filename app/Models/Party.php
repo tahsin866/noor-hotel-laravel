@@ -13,6 +13,7 @@ class Party extends Model
         'party_name',
         'party_type',
         'contact_person',
+        'contact_person_designation',
         'phone',
         'email',
         'address',

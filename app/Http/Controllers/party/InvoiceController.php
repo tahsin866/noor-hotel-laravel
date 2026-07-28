@@ -9,6 +9,7 @@ use App\Models\PaymentHistory;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class InvoiceController extends Controller
 {
@@ -162,7 +163,7 @@ class InvoiceController extends Controller
 
         $subtotal = 0;
         $totalVat = 0;
-        $itemMap = [];
+        $invItems = [];
 
         foreach ($challans as $challan) {
             foreach ($challan->items as $ci) {
@@ -172,38 +173,26 @@ class InvoiceController extends Controller
                 }
 
                 $mealType = $ci->productMeal->meal_type ?? null;
-                $groupKey = $productId.'_'.$mealType;
-
                 $unitPrice = (float) $ci->unit_price;
-                $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 15);
+                $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 10);
                 $quantity = (int) $ci->quantity;
 
-                if (isset($itemMap[$groupKey])) {
-                    $itemMap[$groupKey]['quantity'] += $quantity;
-                } else {
-                    $product = $ci->productMeal->product;
-                    $itemMap[$groupKey] = [
-                        'product_id' => $productId,
-                        'meal_type' => $mealType,
-                        'quantity' => $quantity,
-                        'unit_price' => $unitPrice,
-                        'vat_rate' => $vatRate,
-                    ];
-                }
-            }
-        }
+                $lineSubtotal = $quantity * $unitPrice;
+                $vatAmount = round($lineSubtotal * $vatRate / 100, 2);
+                $lineTotal = $lineSubtotal + $vatAmount;
+                $subtotal += $lineSubtotal;
+                $totalVat += $vatAmount;
 
-        $invItems = [];
-        foreach ($itemMap as $item) {
-            $lineSubtotal = (float) $item['quantity'] * (float) $item['unit_price'];
-            $vatAmount = round($lineSubtotal * (float) $item['vat_rate'] / 100, 2);
-            $lineTotal = $lineSubtotal + $vatAmount;
-            $subtotal += $lineSubtotal;
-            $totalVat += $vatAmount;
-            $invItems[] = array_merge($item, [
-                'vat_amount' => $vatAmount,
-                'total' => $lineTotal,
-            ]);
+                $invItems[] = [
+                    'product_id' => $productId,
+                    'meal_type' => $mealType,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'vat_rate' => $vatRate,
+                    'vat_amount' => $vatAmount,
+                    'total' => $lineTotal,
+                ];
+            }
         }
 
         $totalAmount = $subtotal + $totalVat;
@@ -239,6 +228,10 @@ class InvoiceController extends Controller
             'reference_number' => 'nullable|string',
             'payment_date' => 'nullable|date',
             'notes' => 'nullable|string',
+            'payment_status' => 'nullable|string|in:partial,paid,due',
+            'customer_bank_name' => 'nullable|string',
+            'user_bank_name' => 'nullable|string',
+            'attachment' => 'nullable|file|max:10240',
         ]);
 
         $invoice = Invoice::findOrFail($id);
@@ -246,19 +239,31 @@ class InvoiceController extends Controller
         $amountPaid = (float) $invoice->amount_paid;
         $amountDue = (float) $invoice->amount_due;
 
+        $attachmentPath = null;
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('payment-attachments', 'public');
+        }
+
+        $commonFields = [
+            'payment_status' => $request->payment_status,
+            'customer_bank_name' => $request->customer_bank_name,
+            'user_bank_name' => $request->user_bank_name,
+            'attachment' => $attachmentPath,
+        ];
+
         if ($status === 'paid') {
             $paymentAmount = (float) $invoice->amount_due;
             $amountPaid = (float) $invoice->total_amount;
             $amountDue = 0;
 
-            PaymentHistory::create([
+            PaymentHistory::create(array_merge([
                 'invoice_id' => $invoice->id,
                 'amount' => $paymentAmount,
                 'payment_date' => $request->payment_date ?? now()->format('Y-m-d'),
                 'payment_method' => $request->payment_method,
                 'reference_number' => $request->reference_number,
                 'notes' => $request->notes,
-            ]);
+            ], $commonFields));
         } elseif ($status === 'partial') {
             $paymentAmount = (float) ($request->amount_paid ?? 0);
             if ($paymentAmount <= 0) {
@@ -275,14 +280,14 @@ class InvoiceController extends Controller
                 $status = 'partial';
             }
 
-            PaymentHistory::create([
+            PaymentHistory::create(array_merge([
                 'invoice_id' => $invoice->id,
                 'amount' => $paymentAmount,
                 'payment_date' => $request->payment_date ?? now()->format('Y-m-d'),
                 'payment_method' => $request->payment_method,
                 'reference_number' => $request->reference_number,
                 'notes' => $request->notes,
-            ]);
+            ], $commonFields));
         } elseif ($status === 'pending') {
             $amountPaid = 0;
             $amountDue = (float) $invoice->total_amount;
@@ -321,6 +326,10 @@ class InvoiceController extends Controller
                         'payment_method' => $p->payment_method,
                         'reference_number' => $p->reference_number,
                         'notes' => $p->notes,
+                        'payment_status' => $p->payment_status,
+                        'customer_bank_name' => $p->customer_bank_name,
+                        'user_bank_name' => $p->user_bank_name,
+                        'attachment' => $p->attachment ? Storage::disk('public')->url($p->attachment) : null,
                     ];
                 }),
             ],
@@ -403,27 +412,17 @@ class InvoiceController extends Controller
         $descriptions = [];
         foreach ($invoice->challans as $challan) {
             foreach ($challan->items as $ci) {
-                $productId = $ci->productMeal->product->id ?? null;
-                if ($productId) {
-                    $mealType = $ci->productMeal->meal_type ?? null;
-                    $groupKey = $productId.'_'.$mealType;
-                    $desc = $ci->productMeal->description ?? $ci->productMeal->product->name ?? '-';
-                    if (! isset($descriptions[$groupKey])) {
-                        $descriptions[$groupKey] = [];
-                    }
-                    $descriptions[$groupKey][] = $desc;
-                }
+                $desc = $ci->productMeal->description ?? $ci->productMeal->product->name ?? '-';
+                $descriptions[] = $desc;
             }
         }
 
-        $items = $invoice->items->map(function ($item) use ($descriptions) {
-            $groupKey = $item->product_id.'_'.$item->meal_type;
-            $descs = $descriptions[$groupKey] ?? [];
-            $uniqueDescs = array_unique($descs);
+        $items = $invoice->items->map(function ($item) use (&$descriptions) {
+            $description = array_shift($descriptions) ?? ($item->product->name ?? '-');
 
             return [
                 'product_name' => $item->product->name ?? '-',
-                'description' => implode(', ', $uniqueDescs) ?: ($item->product->name ?? '-'),
+                'description' => $description,
                 'meal_type' => $item->meal_type,
                 'quantity' => $item->quantity,
                 'unit_price' => $item->unit_price,
@@ -468,16 +467,13 @@ class InvoiceController extends Controller
             $pdf = Pdf::loadView('pdf.invoice', $data);
             $pdf->setPaper('a4');
 
-            return $pdf->download('invoice-'.$invoice->invoice_number.'.pdf');
+            return $pdf->download(str_replace('/', '-', $invoice->invoice_number).'.pdf');
         }
 
-        $content = view('pdf.invoice', $data)->render();
+        $pdf = Pdf::loadView('pdf.invoice', $data);
+        $pdf->setPaper('a4');
 
-        return view('pdf.print-layout', [
-            'title' => 'Invoice '.$invoice->invoice_number,
-            'content' => $content,
-            'downloadUrl' => url()->current().'?download=1',
-        ]);
+        return $pdf->stream(str_replace('/', '-', $invoice->invoice_number).'.pdf');
     }
 
     private function numberToWords(float $amount): string

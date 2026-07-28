@@ -22,8 +22,9 @@ import {
     FileText,
     Eye,
     History,
+    Paperclip,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 type Party = { id: number; party_name: string };
 
@@ -47,6 +48,10 @@ type PaymentRecord = {
     payment_method: string;
     reference_number: string;
     notes: string;
+    payment_status: string | null;
+    customer_bank_name: string | null;
+    user_bank_name: string | null;
+    attachment: string | null;
 };
 
 type ReportInvoice = {
@@ -108,6 +113,11 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const [payRef, setPayRef] = useState('');
     const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
     const [payNotes, setPayNotes] = useState('');
+    const [payStatus, setPayStatus] = useState('');
+    const [payCustomerBank, setPayCustomerBank] = useState('');
+    const [payUserBank, setPayUserBank] = useState('');
+    const [payAttachment, setPayAttachment] = useState<File | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyInvoice, setHistoryInvoice] = useState<Invoice | null>(null);
@@ -150,6 +160,11 @@ export default function Payments({ parties }: { parties: Party[] }) {
         setPayRef('');
         setPayDate(new Date().toISOString().slice(0, 10));
         setPayNotes('');
+        setPayStatus('');
+        setPayCustomerBank('');
+        setPayUserBank('');
+        setPayAttachment(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
         setPayOpen(true);
     };
 
@@ -167,17 +182,22 @@ export default function Payments({ parties }: { parties: Party[] }) {
         setProcessing(paying.id);
         try {
             const isFull = amount >= paying.amount_due;
+            const formData = new FormData();
+            formData.append('status', isFull ? 'paid' : 'partial');
+            formData.append('amount_paid', String(amount));
+            if (payMethod) formData.append('payment_method', payMethod);
+            if (payRef) formData.append('reference_number', payRef);
+            if (payDate) formData.append('payment_date', payDate);
+            if (payNotes) formData.append('notes', payNotes);
+            if (payStatus) formData.append('payment_status', payStatus);
+            if (payCustomerBank) formData.append('customer_bank_name', payCustomerBank);
+            if (payUserBank) formData.append('user_bank_name', payUserBank);
+            if (payAttachment) formData.append('attachment', payAttachment);
+
             const res = await fetch(`/api/invoices/${paying.id}/status`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                body: JSON.stringify({
-                    status: isFull ? 'paid' : 'partial',
-                    amount_paid: amount,
-                    payment_method: payMethod,
-                    reference_number: payRef,
-                    payment_date: payDate,
-                    notes: payNotes,
-                }),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: formData,
             });
             const data = await res.json();
             if (res.ok) {
@@ -437,7 +457,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
 
             {/* Payment Dialog */}
             <Dialog open={payOpen} onOpenChange={setPayOpen}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-2xl">
                     <DialogHeader className="space-y-1 border-b border-border pb-4">
                         <DialogTitle className="flex items-center gap-2 text-base">
                             <CreditCard className="size-4.5 text-muted-foreground" />
@@ -476,6 +496,62 @@ export default function Payments({ parties }: { parties: Party[] }) {
                             <Label className="text-xs font-medium text-muted-foreground">Notes</Label>
                             <Input type="text" value={payNotes} onChange={(e) => setPayNotes(e.target.value)} placeholder="Payment notes" />
                         </div>
+                        <div className="grid gap-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">Payment Status</Label>
+                            <select value={payStatus} onChange={(e) => setPayStatus(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none">
+                                <option value="">Select Status</option>
+                                <option value="partial">Partial</option>
+                                <option value="paid">Paid</option>
+                                <option value="due">Due</option>
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">Customer Bank Name</Label>
+                                <Input type="text" value={payCustomerBank} onChange={(e) => setPayCustomerBank(e.target.value)} placeholder="Customer bank name" />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">Your Bank Name</Label>
+                                <Input type="text" value={payUserBank} onChange={(e) => setPayUserBank(e.target.value)} placeholder="Your bank name" />
+                            </div>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">Attachment</Label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                    onChange={(e) => setPayAttachment(e.target.files?.[0] || null)}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-9 text-xs"
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    <Paperclip className="mr-1.5 size-3" />
+                                    {payAttachment ? payAttachment.name : 'Choose File'}
+                                </Button>
+                                {payAttachment && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-9 text-xs text-red-500 hover:text-red-600"
+                                        onClick={() => {
+                                            setPayAttachment(null);
+                                            if (fileInputRef.current) fileInputRef.current.value = '';
+                                        }}
+                                    >
+                                        Remove
+                                    </Button>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground">PDF, JPG, PNG, DOC up to 10MB</p>
+                        </div>
                     </div>
                     <DialogFooter className="border-t border-border pt-4">
                         <Button variant="outline" onClick={() => setPayOpen(false)}>Cancel</Button>
@@ -506,7 +582,9 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                             <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Date</th>
                                             <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Amount</th>
                                             <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Method</th>
-                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Reference</th>
+                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
+                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Banks</th>
+                                            <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase text-muted-foreground">File</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -515,7 +593,29 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                                 <td className="px-3 py-2 text-xs">{fmtDate(p.payment_date)}</td>
                                                 <td className="px-3 py-2 text-right text-xs font-semibold text-green-600">Tk {fmt$(p.amount)}</td>
                                                 <td className="px-3 py-2 text-xs text-muted-foreground">{p.payment_method || '—'}</td>
-                                                <td className="px-3 py-2 text-xs text-muted-foreground">{p.reference_number || '—'}</td>
+                                                <td className="px-3 py-2 text-xs">
+                                                    {p.payment_status ? (
+                                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${p.payment_status === 'paid' ? 'bg-green-100 text-green-700' : p.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                                                            {p.payment_status}
+                                                        </span>
+                                                    ) : '—'}
+                                                </td>
+                                                <td className="px-3 py-2 text-xs text-muted-foreground">
+                                                    {p.customer_bank_name || p.user_bank_name ? (
+                                                        <div>
+                                                            {p.customer_bank_name && <div>Customer: {p.customer_bank_name}</div>}
+                                                            {p.user_bank_name && <div>Yours: {p.user_bank_name}</div>}
+                                                        </div>
+                                                    ) : '—'}
+                                                </td>
+                                                <td className="px-3 py-2 text-center">
+                                                    {p.attachment ? (
+                                                        <a href={p.attachment} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                                                            <FileText className="size-3" />
+                                                            <span className="text-[10px]">View</span>
+                                                        </a>
+                                                    ) : '—'}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>

@@ -29,6 +29,7 @@ type Party = {
     party_name: string;
     party_type: string;
     contact_person: string;
+    contact_person_designation: string;
     phone: string;
     email: string;
     address: string;
@@ -43,6 +44,7 @@ const emptyParty: Party = {
     party_name: '',
     party_type: '',
     contact_person: '',
+    contact_person_designation: '',
     phone: '',
     email: '',
     address: '',
@@ -217,6 +219,17 @@ export default function Party({ parties }: { parties: Party[] }) {
                 <InputError message={errors.contact_person} />
             </div>
 
+            <div className="grid gap-2">
+                <Label htmlFor={`${prefix}contact_person_designation`}>Contact Person Designation</Label>
+                <Input
+                    id={`${prefix}contact_person_designation`}
+                    name="contact_person_designation"
+                    placeholder="Enter contact person designation"
+                    defaultValue={party?.contact_person_designation}
+                />
+                <InputError message={errors.contact_person_designation} />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor={`${prefix}phone`}>Phone</Label>
@@ -357,6 +370,7 @@ export default function Party({ parties }: { parties: Party[] }) {
                                 <th className="px-4 py-3 text-left font-medium">Party Name</th>
                                 <th className="px-4 py-3 text-left font-medium">Type</th>
                                 <th className="px-4 py-3 text-left font-medium">Contact Person</th>
+                                <th className="px-4 py-3 text-left font-medium">Designation</th>
                                 <th className="px-4 py-3 text-left font-medium">Phone</th>
                                 <th className="px-4 py-3 text-left font-medium">Email</th>
                                 <th className="px-4 py-3 text-left font-medium">Agreement</th>
@@ -367,7 +381,7 @@ export default function Party({ parties }: { parties: Party[] }) {
                         <tbody>
                             {parties.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+                                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                                         No parties found. Click "Add Party" to create one.
                                     </td>
                                 </tr>
@@ -377,6 +391,7 @@ export default function Party({ parties }: { parties: Party[] }) {
                                         <td className="px-4 py-3 font-medium">{party.party_name}</td>
                                         <td className="px-4 py-3 capitalize">{party.party_type}</td>
                                         <td className="px-4 py-3">{party.contact_person}</td>
+                                        <td className="px-4 py-3">{party.contact_person_designation}</td>
                                         <td className="px-4 py-3">{party.phone}</td>
                                         <td className="px-4 py-3">{party.email}</td>
                                         <td className="px-4 py-3 capitalize">{party.agreement_type}</td>

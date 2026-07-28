@@ -73,15 +73,12 @@ class PartyController extends Controller
             $pdf = Pdf::loadView('pdf.party', ['party' => $party]);
             $pdf->setPaper('a4');
 
-            return $pdf->download('party-'.$party->party_name.'.pdf');
+            return $pdf->download(str_replace('/', '-', $party->party_name).'.pdf');
         }
 
-        $content = view('pdf.party', ['party' => $party])->render();
+        $pdf = Pdf::loadView('pdf.party', ['party' => $party]);
+        $pdf->setPaper('a4');
 
-        return view('pdf.print-layout', [
-            'title' => 'Party - '.$party->party_name,
-            'content' => $content,
-            'downloadUrl' => url()->current().'?download=1',
-        ]);
+        return $pdf->stream(str_replace('/', '-', $party->party_name).'.pdf');
     }
 }
