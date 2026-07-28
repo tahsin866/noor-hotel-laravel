@@ -55,23 +55,44 @@
             <tr>
                 <th style="width:40px;">SL</th>
                 <th>Product / Item</th>
-                <th style="width:70px;text-align:left;">Meal</th>
+                <th style="width:80px;text-align:left;">Meal</th>
                 <th style="width:70px;text-align:center;">Qty</th>
                 <th style="width:100px;text-align:right;">Unit Price</th>
-                <th style="width:100px;text-align:right;">Total</th>
+                <th style="width:100px;text-align:right;">Amount</th>
             </tr>
         </thead>
         <tbody>
-            @foreach($items as $i => $item)
-            <tr>
-                <td>{{ $i + 1 }}</td>
-                <td>{{ $item['description'] }}</td>
-                <td style="text-align:left;">{{ $item['meal_type'] ?? '—' }}</td>
-                <td style="text-align:center;">{{ $item['quantity'] }}</td>
-                <td style="text-align:right;">Tk {{ fmtPrice($item['unit_price']) }}</td>
-                <td style="text-align:right;font-weight:bold;">Tk {{ fmtPrice($item['total']) }}</td>
-            </tr>
+            @php
+                $currentProduct = null;
+                $sl = 0;
+            @endphp
+            @foreach($items as $item)
+                @php
+                    $isNewProduct = ($item['product_name'] !== $currentProduct);
+                    $currentProduct = $item['product_name'];
+                    $sl++;
+                @endphp
+                @if($isNewProduct && $loop->index > 0)
+                    <tr style="background:#f8fafc;">
+                        <td colspan="5" style="border:1px solid #000;padding:4px 12px;font-size:11px;color:#475569;"></td>
+                        <td style="border:1px solid #000;padding:4px 12px;text-align:right;font-size:11px;font-weight:bold;">Tk {{ fmtPrice($item['total']) }}</td>
+                    </tr>
+                @endif
+                <tr>
+                    <td>{{ $sl }}</td>
+                    <td style="white-space:pre-line;font-size:12px;">{{ $item['description'] }}</td>
+                    <td style="text-align:left;text-transform:capitalize;">{{ $item['meal_type'] }}</td>
+                    <td style="text-align:center;">{{ $item['quantity'] }}</td>
+                    <td style="text-align:right;">Tk {{ fmtPrice($item['unit_price']) }}</td>
+                    <td style="text-align:right;font-weight:bold;">Tk {{ fmtPrice($item['total']) }}</td>
+                </tr>
             @endforeach
+            @if(count($items) > 0)
+                <tr style="background:#f1f5f9;">
+                    <td colspan="5" style="border:1px solid #000;padding:6px 12px;font-size:12px;font-weight:bold;text-align:right;">Grand Total:</td>
+                    <td style="border:1px solid #000;padding:6px 12px;text-align:right;font-size:14px;font-weight:bold;">Tk {{ fmtPrice($invoice->total_amount) }}</td>
+                </tr>
+            @endif
         </tbody>
     </table>
 
