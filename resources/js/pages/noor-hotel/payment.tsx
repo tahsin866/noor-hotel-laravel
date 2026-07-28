@@ -52,6 +52,8 @@ type PaymentRecord = {
     customer_bank_name: string | null;
     user_bank_name: string | null;
     attachment: string | null;
+    reduce_amount: number | null;
+    reduce_note: string | null;
 };
 
 type ReportInvoice = {
@@ -117,6 +119,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const [payCustomerBank, setPayCustomerBank] = useState('');
     const [payUserBank, setPayUserBank] = useState('');
     const [payAttachment, setPayAttachment] = useState<File | null>(null);
+    const [payReduceAmount, setPayReduceAmount] = useState('');
+    const [payReduceNote, setPayReduceNote] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -164,6 +168,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
         setPayCustomerBank('');
         setPayUserBank('');
         setPayAttachment(null);
+        setPayReduceAmount('');
+        setPayReduceNote('');
         if (fileInputRef.current) fileInputRef.current.value = '';
         setPayOpen(true);
     };
@@ -193,6 +199,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
             if (payCustomerBank) formData.append('customer_bank_name', payCustomerBank);
             if (payUserBank) formData.append('user_bank_name', payUserBank);
             if (payAttachment) formData.append('attachment', payAttachment);
+            if (payReduceAmount) formData.append('reduce_amount', payReduceAmount);
+            if (payReduceNote) formData.append('reduce_note', payReduceNote);
 
             const res = await fetch(`/api/invoices/${paying.id}/status`, {
                 method: 'PATCH',
@@ -474,6 +482,21 @@ export default function Payments({ parties }: { parties: Party[] }) {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">Reduce Amount</Label>
+                                <Input type="number" value={payReduceAmount} onChange={(e) => setPayReduceAmount(e.target.value)} min={0} step="0.01" placeholder="0" />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">Reduce Note</Label>
+                                <Input type="text" value={payReduceNote} onChange={(e) => setPayReduceNote(e.target.value)} placeholder="e.g. VAT, discount" />
+                            </div>
+                        </div>
+                        {(parseFloat(payReduceAmount) > 0) && (
+                            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                                Due: Tk {fmt$(paying?.amount_due || 0)} &minus; Reduce: Tk {fmt$(parseFloat(payReduceAmount) || 0)} = <strong>Tk {fmt$(Math.max(0, (paying?.amount_due || 0) - (parseFloat(payReduceAmount) || 0)))}</strong>
+                            </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-1.5">
                                 <Label className="text-xs font-medium text-muted-foreground">Payment Date *</Label>
                                 <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
                             </div>
@@ -581,9 +604,9 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                         <tr className="border-b border-border bg-muted/50">
                                             <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Date</th>
                                             <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Amount</th>
+                                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Reduce</th>
                                             <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Method</th>
                                             <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
-                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Banks</th>
                                             <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase text-muted-foreground">File</th>
                                         </tr>
                                     </thead>
@@ -592,20 +615,20 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                             <tr key={p.id} className="border-t border-border first:border-t-0">
                                                 <td className="px-3 py-2 text-xs">{fmtDate(p.payment_date)}</td>
                                                 <td className="px-3 py-2 text-right text-xs font-semibold text-green-600">Tk {fmt$(p.amount)}</td>
+                                                <td className="px-3 py-2 text-right text-xs text-muted-foreground">
+                                                    {p.reduce_amount ? (
+                                                        <div>
+                                                            <span className="text-amber-600 font-medium">-Tk {fmt$(p.reduce_amount)}</span>
+                                                            {p.reduce_note && <div className="text-[10px] text-amber-500">{p.reduce_note}</div>}
+                                                        </div>
+                                                    ) : '—'}
+                                                </td>
                                                 <td className="px-3 py-2 text-xs text-muted-foreground">{p.payment_method || '—'}</td>
                                                 <td className="px-3 py-2 text-xs">
                                                     {p.payment_status ? (
                                                         <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${p.payment_status === 'paid' ? 'bg-green-100 text-green-700' : p.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                                                             {p.payment_status}
                                                         </span>
-                                                    ) : '—'}
-                                                </td>
-                                                <td className="px-3 py-2 text-xs text-muted-foreground">
-                                                    {p.customer_bank_name || p.user_bank_name ? (
-                                                        <div>
-                                                            {p.customer_bank_name && <div>Customer: {p.customer_bank_name}</div>}
-                                                            {p.user_bank_name && <div>Yours: {p.user_bank_name}</div>}
-                                                        </div>
                                                     ) : '—'}
                                                 </td>
                                                 <td className="px-3 py-2 text-center">

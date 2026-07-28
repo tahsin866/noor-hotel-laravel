@@ -232,6 +232,8 @@ class InvoiceController extends Controller
             'customer_bank_name' => 'nullable|string',
             'user_bank_name' => 'nullable|string',
             'attachment' => 'nullable|file|max:10240',
+            'reduce_amount' => 'nullable|numeric|min:0',
+            'reduce_note' => 'nullable|string',
         ]);
 
         $invoice = Invoice::findOrFail($id);
@@ -244,17 +246,29 @@ class InvoiceController extends Controller
             $attachmentPath = $request->file('attachment')->store('payment-attachments', 'public');
         }
 
+        $reduceAmount = (float) ($request->reduce_amount ?? 0);
+
         $commonFields = [
             'payment_status' => $request->payment_status,
             'customer_bank_name' => $request->customer_bank_name,
             'user_bank_name' => $request->user_bank_name,
             'attachment' => $attachmentPath,
+            'reduce_amount' => $reduceAmount > 0 ? $reduceAmount : null,
+            'reduce_note' => $request->reduce_note,
         ];
 
         if ($status === 'paid') {
-            $paymentAmount = (float) $invoice->amount_due;
-            $amountPaid = (float) $invoice->total_amount;
-            $amountDue = 0;
+            $paymentAmount = (float) $invoice->amount_due - $reduceAmount;
+            if ($paymentAmount < 0) {
+                $paymentAmount = 0;
+            }
+            $amountPaid = (float) $invoice->amount_paid + $paymentAmount;
+            $amountDue = (float) $invoice->total_amount - $amountPaid;
+
+            if ($amountDue <= 0) {
+                $amountDue = 0;
+                $status = 'paid';
+            }
 
             PaymentHistory::create(array_merge([
                 'invoice_id' => $invoice->id,
@@ -269,11 +283,14 @@ class InvoiceController extends Controller
             if ($paymentAmount <= 0) {
                 return response()->json(['success' => false, 'message' => 'Payment amount must be greater than 0'], 422);
             }
+            $paymentAmount = $paymentAmount - $reduceAmount;
+            if ($paymentAmount < 0) {
+                $paymentAmount = 0;
+            }
             $amountPaid = (float) $invoice->amount_paid + $paymentAmount;
             $amountDue = (float) $invoice->total_amount - $amountPaid;
 
-            if ($amountPaid >= (float) $invoice->total_amount) {
-                $amountPaid = (float) $invoice->total_amount;
+            if ($amountDue <= 0) {
                 $amountDue = 0;
                 $status = 'paid';
             } else {
@@ -330,6 +347,8 @@ class InvoiceController extends Controller
                         'customer_bank_name' => $p->customer_bank_name,
                         'user_bank_name' => $p->user_bank_name,
                         'attachment' => $p->attachment ? Storage::disk('public')->url($p->attachment) : null,
+                        'reduce_amount' => $p->reduce_amount,
+                        'reduce_note' => $p->reduce_note,
                     ];
                 }),
             ],

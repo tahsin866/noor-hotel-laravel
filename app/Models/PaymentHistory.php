@@ -22,6 +22,8 @@ class PaymentHistory extends Model
         'customer_bank_name',
         'user_bank_name',
         'attachment',
+        'reduce_amount',
+        'reduce_note',
     ];
 
     protected $casts = [

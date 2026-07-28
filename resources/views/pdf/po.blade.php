@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <title>Purchase Order {{ $product->code }}</title>
     <style>
-        @page { size: A4; margin: 15mm; }
+        @page { size: A4; }
         body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
         .header { text-align: center; margin-bottom: 20px; }
         .header h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; }

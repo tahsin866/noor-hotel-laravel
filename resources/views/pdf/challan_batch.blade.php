@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <title>Challans Batch Print</title>
     <style>
-        @page { size: A4; margin: 15mm; }
+        @page { size: A4; }
         body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
         .header { text-align: center; border-bottom: 3px solid #2563eb; padding-bottom: 12px; margin-bottom: 16px; }
         h1 { font-size: 22px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }

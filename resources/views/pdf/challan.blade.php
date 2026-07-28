@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <title>Challan {{ $challan->challan_number }}</title>
     <style>
-        @page { size: A4; margin: 15mm; }
+        @page { size: A4; }
         body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
         .header { text-align: center; padding-bottom: 12px; margin-bottom: 16px; }
         h1 { font-size: 22px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
@@ -15,6 +15,10 @@
         .content-wrapper { position: relative; min-height: 760px; }
         .footer { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
         .signatures { position: absolute; bottom: 30px; left: 0; right: 0; }
+        @media print {
+            body { margin: 0; padding: 0; }
+            .content-wrapper { min-height: auto; }
+        }
     </style>
 </head>
 <body>
