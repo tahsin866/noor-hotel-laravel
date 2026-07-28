@@ -92,6 +92,7 @@ type Invoice = {
     invoice_number: string;
     party_id: number;
     party_name: string;
+    party_address?: string;
     date: string;
     due_date: string;
     total_amount: number;
@@ -362,14 +363,15 @@ export default function Invoices({ parties, products, challans }: { parties: Par
     </div>
     <table class="info">
         <tr>
-            <td style="width:60%;">
-                <strong>Invoice to:</strong><br/><br/>
-                ${d.party_name || 'N/A'}<br/><br/>
+            <td style="width:60%;word-break:break-word;">
+                <strong>Invoice to:</strong><br/>
+                ${d.party_name || 'N/A'}<br/>
+                ${d.party_address ? d.party_address + '<br/>' : ''}
             </td>
             <td style="width:40%;text-align:right;">
                 <div style="display:inline-block;text-align:left;margin-top:4px;">
-                    <strong>Invoice Date:</strong> ${dateStr}<br/><br/>
-                    <strong>Ref:</strong> ${d.invoice_number}<br/><br/>
+                    <strong>Invoice Date:</strong> ${dateStr}<br/>
+                    <strong>Ref:</strong> ${d.invoice_number}<br/>
                     <strong>Customer PO:</strong> ${d.customer_po_number || '-'}
                 </div>
             </td>
@@ -478,7 +480,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                     <div style="border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:16px;"><h1 style="font-size:22px;margin:0;color:#0f172a;">INVOICE</h1></div>
                     <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
                         <tr><td style="width:50%;border:none;padding:4px 0;"><strong>Invoice No:</strong> ${d.invoice_number}</td><td style="width:50%;border:none;padding:4px 0;"><strong>Date:</strong> ${fmtDate(d.date)}</td></tr>
-                        <tr><td style="border:none;padding:4px 0;"><strong>Party:</strong> ${d.party_name || 'N/A'}</td><td style="border:none;padding:4px 0;"><strong>Due Date:</strong> ${fmtDate(d.due_date)}</td></tr>
+                        <tr><td style="border:none;padding:4px 0;"><strong>Party:</strong> <span style="word-break:break-word;">${d.party_name || 'N/A'}${d.party_address ? '<br/>' + d.party_address : ''}</span></td><td style="border:none;padding:4px 0;"><strong>Due Date:</strong> ${fmtDate(d.due_date)}</td></tr>
                         <tr><td colspan="2" style="border:none;padding:4px 0;"><strong>Status:</strong> ${d.status}</td></tr>
                     </table>
                     ${d.challans && d.challans.length ? `<h3 style="font-size:14px;margin:16px 0 8px;color:#475569;">Challans</h3><table style="width:100%;border-collapse:collapse;margin-bottom:16px;"><thead><tr><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;width:40px;">#</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Challan No</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Product/PO</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Items</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Date</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:center;width:100px;">Status</th></tr></thead><tbody>${chlRows}</tbody></table>` : ''}
@@ -781,9 +783,12 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                     {viewing && (
                         <div className="space-y-5">
                             <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div>
+                                <div className="break-words">
                                     <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Party</span>
                                     <span className="font-medium">{viewing.party_name || '—'}</span>
+                                    {viewing.party_address && (
+                                        <span className="block text-xs text-muted-foreground break-words">{viewing.party_address}</span>
+                                    )}
                                 </div>
                                 <div>
                                     <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Status</span>

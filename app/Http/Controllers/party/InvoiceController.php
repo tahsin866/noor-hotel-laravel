@@ -142,6 +142,7 @@ class InvoiceController extends Controller
                 'invoice_number' => $invoice->invoice_number,
                 'party_id' => $invoice->party_id,
                 'party_name' => $invoice->party->party_name ?? '-',
+                'party_address' => $invoice->party->address ?? '',
                 'date' => $invoice->date,
                 'due_date' => $invoice->due_date,
                 'subtotal' => $invoice->subtotal,
