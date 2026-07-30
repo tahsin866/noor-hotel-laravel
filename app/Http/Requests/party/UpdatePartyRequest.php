@@ -21,7 +21,7 @@ class UpdatePartyRequest extends FormRequest
             'phone' => 'nullable|string|max:255',
             'email' => 'nullable|email|max:255',
             'address' => 'nullable|string',
-            'agreement_type' => 'nullable|string|in:annual,monthly,quarterly,custom',
+            'agreement_type' => 'nullable|string|in:no-agreement,annual,monthly,quarterly,custom',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date',
             'notes' => 'nullable|string',

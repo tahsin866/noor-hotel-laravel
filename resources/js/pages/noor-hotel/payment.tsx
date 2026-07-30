@@ -16,12 +16,8 @@ import {
     ChevronLeft,
     ChevronRight,
     CreditCard,
-    CheckCircle,
-    Clock,
-    FileDown,
-    FileText,
-    Eye,
-    History,
+    Printer,
+    Share2,
     Paperclip,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -39,40 +35,6 @@ type Invoice = {
     amount_paid: number;
     amount_due: number;
     status: string;
-};
-
-type PaymentRecord = {
-    id: number;
-    amount: number;
-    payment_date: string;
-    payment_method: string;
-    reference_number: string;
-    notes: string;
-    payment_status: string | null;
-    customer_bank_name: string | null;
-    user_bank_name: string | null;
-    attachment: string | null;
-    reduce_amount: number | null;
-    reduce_note: string | null;
-};
-
-type ReportInvoice = {
-    invoice_number: string;
-    party_name: string;
-    date: string;
-    due_date: string;
-    total_amount: number;
-    amount_paid: number;
-    amount_due: number;
-    status: string;
-    payments: { date: string; amount: number; method: string; reference: string }[];
-};
-
-type ReportSummary = {
-    total_invoices: number;
-    total_amount: number;
-    total_paid: number;
-    total_due: number;
 };
 
 const statusFilters = [
@@ -104,6 +66,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(10);
     const [filter, setFilter] = useState('all');
     const [partyFilter, setPartyFilter] = useState('');
     const [processing, setProcessing] = useState<number | null>(null);
@@ -121,25 +84,14 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const [payAttachment, setPayAttachment] = useState<File | null>(null);
     const [payReduceAmount, setPayReduceAmount] = useState('');
     const [payReduceNote, setPayReduceNote] = useState('');
+    const [payReduceOtherNote, setPayReduceOtherNote] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
-
-    const [historyOpen, setHistoryOpen] = useState(false);
-    const [historyInvoice, setHistoryInvoice] = useState<Invoice | null>(null);
-    const [paymentHistory, setPaymentHistory] = useState<PaymentRecord[]>([]);
-
-    const [reportOpen, setReportOpen] = useState(false);
-    const [reportParty, setReportParty] = useState('');
-    const [reportFrom, setReportFrom] = useState('');
-    const [reportTo, setReportTo] = useState('');
-    const [reportStatus, setReportStatus] = useState('');
-    const [reportData, setReportData] = useState<ReportInvoice[]>([]);
-    const [reportSummary, setReportSummary] = useState<ReportSummary | null>(null);
 
     const fetchInvoices = useCallback(async () => {
         try {
             const params = new URLSearchParams();
             params.set('page', String(page));
-            params.set('limit', '10');
+            params.set('limit', String(limit));
             if (filter !== 'all') params.set('status', filter);
             if (partyFilter) params.set('party_id', partyFilter);
             const res = await fetch(`/api/invoices?${params.toString()}`, {
@@ -151,7 +103,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
         } catch {
             toast.error('Failed to load invoices');
         }
-    }, [page, filter, partyFilter]);
+    }, [page, limit, filter, partyFilter]);
 
     useEffect(() => {
         fetchInvoices();
@@ -170,6 +122,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
         setPayAttachment(null);
         setPayReduceAmount('');
         setPayReduceNote('');
+        setPayReduceOtherNote('');
         if (fileInputRef.current) fileInputRef.current.value = '';
         setPayOpen(true);
     };
@@ -189,7 +142,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
         try {
             const isFull = amount >= paying.amount_due;
             const formData = new FormData();
-            formData.append('status', isFull ? 'paid' : 'partial');
+            formData.append('status', payStatus || (isFull ? 'paid' : 'partial'));
             formData.append('amount_paid', String(amount));
             if (payMethod) formData.append('payment_method', payMethod);
             if (payRef) formData.append('reference_number', payRef);
@@ -200,7 +153,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
             if (payUserBank) formData.append('user_bank_name', payUserBank);
             if (payAttachment) formData.append('attachment', payAttachment);
             if (payReduceAmount) formData.append('reduce_amount', payReduceAmount);
-            if (payReduceNote) formData.append('reduce_note', payReduceNote);
+            const finalReduceNote = payReduceNote === 'Other' ? payReduceOtherNote : payReduceNote;
+            if (finalReduceNote) formData.append('reduce_note', finalReduceNote);
 
             const res = await fetch(`/api/invoices/${paying.id}/status`, {
                 method: 'PATCH',
@@ -222,33 +176,26 @@ export default function Payments({ parties }: { parties: Party[] }) {
         }
     };
 
-    const openHistory = async (inv: Invoice) => {
-        setHistoryInvoice(inv);
-        try {
-            const res = await fetch(`/api/invoices/${inv.id}/payment-history`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            const data = await res.json();
-            setPaymentHistory(data.data?.payments || []);
-            setHistoryOpen(true);
-        } catch {
-            toast.error('Failed to load payment history');
-        }
-    };
-
-    const exportIndividualReport = (inv: Invoice) => {
-        let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Payment Report - ${inv.invoice_number}</title>
+    const printPayment = (inv: Invoice) => {
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Payment Receipt - ${inv.invoice_number}</title>
         <style>@page{size:A4;margin:15mm;}body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:20px;font-size:13px;}</style></head><body>
-        <div style="border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:16px;"><h1 style="font-size:22px;margin:0;color:#0f172a;">PAYMENT REPORT</h1></div>
-        <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
-            <tr><td style="width:50%;border:none;padding:4px 0;"><strong>Invoice No:</strong> ${inv.invoice_number}</td><td style="width:50%;border:none;padding:4px 0;"><strong>Date:</strong> ${fmtDate(inv.date)}</td></tr>
-            <tr><td style="border:none;padding:4px 0;"><strong>Party:</strong> ${inv.party_name || 'N/A'}</td><td style="border:none;padding:4px 0;"><strong>Due Date:</strong> ${fmtDate(inv.due_date)}</td></tr>
-            <tr><td style="border:none;padding:4px 0;"><strong>Total:</strong> Tk ${fmt$(inv.total_amount)}</td><td style="border:none;padding:4px 0;"><strong>Paid:</strong> Tk ${fmt$(inv.amount_paid)}</td></tr>
-            <tr><td colspan="2" style="border:none;padding:4px 0;"><strong>Due:</strong> Tk ${fmt$(inv.amount_due)} | <strong>Status:</strong> ${inv.status}</td></tr>
+        <div style="text-align:center;margin-bottom:20px;"><h1 style="font-size:26px;margin:0;color:#0f172a;text-transform:uppercase;letter-spacing:2px;">PAYMENT RECEIPT</h1></div>
+        <table style="width:100%;border:none;margin-bottom:20px;font-size:13px;">
+            <tr><td style="width:50%;border:none;padding:4px 0;"><strong>Invoice No:</strong> ${inv.invoice_number}</td><td style="width:50%;border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${fmtDate(inv.date)}</td></tr>
+            <tr><td style="border:none;padding:4px 0;"><strong>Party:</strong> ${inv.party_name || "N/A"}</td><td style="border:none;padding:4px 0;text-align:right;"><strong>Due Date:</strong> ${fmtDate(inv.due_date)}</td></tr>
         </table>
-        <p style="color:#475569;font-size:12px;">Payment history will be available after recording payments.</p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+            <thead><tr style="background:#f1f5f9;"><th style="padding:8px 12px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;">Description</th><th style="padding:8px 12px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:120px;">Amount (Tk)</th></tr></thead>
+            <tbody>
+                <tr><td style="padding:8px 12px;border:1px solid #000;">Total Amount</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;">${fmt$(inv.total_amount)}</td></tr>
+                <tr><td style="padding:8px 12px;border:1px solid #000;">Amount Paid</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#16a34a;">${fmt$(inv.amount_paid)}</td></tr>
+                <tr><td style="padding:8px 12px;border:1px solid #000;">Amount Due</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#dc2626;">${fmt$(inv.amount_due)}</td></tr>
+                <tr style="background:#f8fafc;"><td style="padding:8px 12px;border:1px solid #000;font-weight:bold;">Status</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;text-transform:capitalize;">${inv.status}</td></tr>
+            </tbody>
+        </table>
+        <div style="margin-top:30px;text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">M/S Noor Hotel and Restaurant</div>
         </body></html>`;
-        const win = window.open('', '_blank', 'width=800,height=600');
+        const win = window.open("", "_blank", "width=800,height=600");
         if (win) {
             win.document.write(html);
             win.document.close();
@@ -257,74 +204,71 @@ export default function Payments({ parties }: { parties: Party[] }) {
         }
     };
 
-    const fetchReport = async () => {
-        try {
-            const params = new URLSearchParams();
-            if (reportParty) params.set('party_id', reportParty);
-            if (reportFrom) params.set('date_from', reportFrom);
-            if (reportTo) params.set('date_to', reportTo);
-            if (reportStatus) params.set('status', reportStatus);
-            const res = await fetch(`/api/payments/report?${params.toString()}`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            });
-            const data = await res.json();
-            setReportData(data.data?.invoices || []);
-            setReportSummary(data.data?.summary || null);
-        } catch {
-            toast.error('Failed to load report');
+    const sharePayment = async (inv: Invoice) => {
+        const text = [
+            `Invoice: ${inv.invoice_number}`,
+            `Party: ${inv.party_name}`,
+            `Date: ${fmtDate(inv.date)}`,
+            `Amount: Tk ${fmt$(inv.total_amount)}`,
+            `Paid: Tk ${fmt$(inv.amount_paid)}`,
+            `Due: Tk ${fmt$(inv.amount_due)}`,
+            `Status: ${inv.status}`,
+        ].join("\n");
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: `Payment - ${inv.invoice_number}`, text });
+            } catch {
+                // user cancelled
+            }
+        } else {
+            await navigator.clipboard.writeText(text);
+            toast.success("Payment info copied to clipboard");
         }
     };
 
-    const exportBulkReport = () => {
-        if (!reportSummary) return;
+    const printPaymentReport = () => {
+        if (invoices.length === 0) {
+            toast.error('No invoices to print');
+            return;
+        }
         let rows = '';
-        reportData.forEach((inv) => {
+        invoices.forEach((inv, i) => {
             rows += `<tr>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;font-weight:600;">${inv.invoice_number}</td>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;">${inv.party_name}</td>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;">${inv.date}</td>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;">${inv.due_date}</td>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">Tk ${fmt$(inv.total_amount)}</td>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;color:#16a34a;">Tk ${fmt$(inv.amount_paid)}</td>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;color:#dc2626;">Tk ${fmt$(inv.amount_due)}</td>
-                <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${inv.status}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;">${i + 1}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;font-weight:600;">${inv.invoice_number}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;">${inv.party_name || '—'}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;">${fmtDate(inv.date)}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;">Tk ${fmt$(inv.total_amount)}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#16a34a;">Tk ${fmt$(inv.amount_paid)}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#dc2626;">Tk ${fmt$(inv.amount_due)}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:center;text-transform:capitalize;">${inv.status === 'pending' ? 'Unpaid' : inv.status}</td>
             </tr>`;
-            if (inv.payments && inv.payments.length) {
-                inv.payments.forEach((p) => {
-                    rows += `<tr style="background:#f8fafc;">
-                        <td colspan="3" style="padding:4px 12px;border:1px solid #e2e8f0;font-size:11px;color:#64748b;">Payment: ${p.date}</td>
-                        <td style="padding:4px 12px;border:1px solid #e2e8f0;font-size:11px;color:#64748b;">${p.method || '-'}</td>
-                        <td style="padding:4px 12px;border:1px solid #e2e8f0;font-size:11px;color:#64748b;">${p.reference || '-'}</td>
-                        <td colspan="2" style="padding:4px 12px;border:1px solid #e2e8f0;font-size:11px;color:#16a34a;text-align:right;">Tk ${fmt$(p.amount)}</td>
-                        <td style="padding:4px 12px;border:1px solid #e2e8f0;"></td>
-                    </tr>`;
-                });
-            }
         });
+        const totalPaid = invoices.reduce((s, i) => s + (i.amount_paid || 0), 0);
+        const totalDue = invoices.reduce((s, i) => s + (i.amount_due || 0), 0);
         const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Payment Report</title>
-        <style>@page{size:landscape;margin:10mm;}body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:20px;font-size:12px;}</style></head><body>
-        <div style="border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:16px;"><h1 style="font-size:20px;margin:0;">PAYMENT REPORT</h1></div>
+        <style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:20px;font-size:13px;}</style></head><body>
+        <div style="text-align:center;margin-bottom:20px;"><h1 style="font-size:26px;margin:0;color:#0f172a;text-transform:uppercase;letter-spacing:2px;">PAYMENT REPORT</h1></div>
         <div style="display:flex;gap:24px;margin-bottom:16px;font-size:13px;">
-            <div><strong>Total Invoices:</strong> ${reportSummary.total_invoices}</div>
-            <div><strong>Total Amount:</strong> Tk ${fmt$(reportSummary.total_amount)}</div>
-            <div style="color:#16a34a;"><strong>Total Paid:</strong> Tk ${fmt$(reportSummary.total_paid)}</div>
-            <div style="color:#dc2626;"><strong>Total Due:</strong> Tk ${fmt$(reportSummary.total_due)}</div>
+            <div><strong>Total Invoices:</strong> ${invoices.length}</div>
+            <div><strong>Total Amount:</strong> Tk ${fmt$(invoices.reduce((s, i) => s + (i.total_amount || 0), 0))}</div>
+            <div style="color:#16a34a;"><strong>Total Paid:</strong> Tk ${fmt$(totalPaid)}</div>
+            <div style="color:#dc2626;"><strong>Total Due:</strong> Tk ${fmt$(totalDue)}</div>
         </div>
         <table style="width:100%;border-collapse:collapse;">
             <thead><tr style="background:#f1f5f9;">
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Invoice</th>
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Party</th>
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Date</th>
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:left;font-size:11px;">Due Date</th>
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-size:11px;">Amount</th>
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-size:11px;">Paid</th>
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-size:11px;">Due</th>
-                <th style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;font-size:11px;">Status</th>
-            </tr></thead><tbody>${rows}</tbody>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;width:30px;">#</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;">Invoice</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;">Party</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;">Date</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:100px;">Amount</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:100px;">Paid</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:100px;">Due</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:11px;text-transform:uppercase;width:80px;">Status</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
         </table>
-        <div style="margin-top:30px;text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">
-            Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; Noor Hotel PRG
-        </div>
+        <div style="margin-top:30px;text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">M/S Noor Hotel and Restaurant</div>
         </body></html>`;
         const win = window.open('', '_blank', 'width=1000,height=600');
         if (win) {
@@ -335,7 +279,9 @@ export default function Payments({ parties }: { parties: Party[] }) {
         }
     };
 
-    const totalPages = Math.ceil(total / 10);
+    const totalPages = Math.ceil(total / limit);
+    const from = total === 0 ? 0 : (page - 1) * limit + 1;
+    const to = Math.min(page * limit, total);
 
     return (
         <>
@@ -348,9 +294,9 @@ export default function Payments({ parties }: { parties: Party[] }) {
                         </div>
                         <Heading variant="small" title="Payments" description="Track and manage invoice payments" />
                     </div>
-                    <Button onClick={() => { setReportOpen(true); fetchReport(); }}>
-                        <FileDown className="mr-1.5 size-4" />
-                        Payment Report
+                    <Button variant="outline" size="sm" onClick={printPaymentReport}>
+                        <Printer className="mr-1.5 size-4" />
+                        Print Payment Report
                     </Button>
                 </div>
 
@@ -377,8 +323,18 @@ export default function Payments({ parties }: { parties: Party[] }) {
                         ))}
                     </select>
                     <span className="ml-auto text-xs font-medium text-muted-foreground">
-                        {total} invoice{total === 1 ? '' : 's'}
+                        {from}–{to} of {total} invoice{total === 1 ? '' : 's'}
                     </span>
+                    <select
+                        value={limit}
+                        onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                        className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                    >
+                        <option value={10}>10 / page</option>
+                        <option value={20}>20 / page</option>
+                        <option value={50}>50 / page</option>
+                        <option value={100}>100 / page</option>
+                    </select>
                 </div>
 
                 <div className="relative flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 shadow-sm dark:border-sidebar-border">
@@ -430,13 +386,13 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                                             Pay
                                                         </Button>
                                                     )}
-                                                    <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:text-blue-700" onClick={() => openHistory(inv)}>
-                                                        <History className="mr-1 size-3" />
-                                                        History
+                                                    <Button variant="ghost" size="sm" className="h-7 text-xs text-blue-600 hover:text-blue-700" onClick={() => printPayment(inv)}>
+                                                        <Printer className="mr-1 size-3" />
+                                                        Print
                                                     </Button>
-                                                    <Button variant="ghost" size="sm" className="h-7 text-xs text-purple-600 hover:text-purple-700" onClick={() => exportIndividualReport(inv)}>
-                                                        <FileDown className="mr-1 size-3" />
-                                                        Report
+                                                    <Button variant="ghost" size="sm" className="h-7 text-xs text-purple-600 hover:text-purple-700" onClick={() => sharePayment(inv)}>
+                                                        <Share2 className="mr-1 size-3" />
+                                                        Share
                                                     </Button>
                                                 </div>
                                             </td>
@@ -448,7 +404,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
                     </div>
                 </div>
 
-                {totalPages > 1 && (
+                {total > 0 && (
                     <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
                         <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
                         <div className="flex items-center gap-2">
@@ -478,21 +434,32 @@ export default function Payments({ parties }: { parties: Party[] }) {
                     <div className="space-y-4 py-2">
                         <div className="grid gap-1.5">
                             <Label className="text-xs font-medium text-muted-foreground">Amount *</Label>
-                            <Input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} min={0} max={paying?.amount_due} step="0.01" />
+                            <Input type="number" value={payAmount} onChange={(e) => {
+                                setPayAmount(e.target.value);
+                                const due = paying?.amount_due || 0;
+                                const paid = parseFloat(e.target.value) || 0;
+                                const diff = Math.max(0, due - paid);
+                                setPayReduceAmount(diff > 0 ? String(diff) : '');
+                            }} min={0} max={paying?.amount_due} step="0.01" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-1.5">
                                 <Label className="text-xs font-medium text-muted-foreground">Reduce Amount</Label>
-                                <Input type="number" value={payReduceAmount} onChange={(e) => setPayReduceAmount(e.target.value)} min={0} step="0.01" placeholder="0" />
+                                <Input type="number" value={payReduceAmount} disabled min={0} step="0.01" placeholder="0" className="bg-muted/40 text-muted-foreground" />
                             </div>
                             <div className="grid gap-1.5">
                                 <Label className="text-xs font-medium text-muted-foreground">Reduce Note</Label>
-                                <Input type="text" value={payReduceNote} onChange={(e) => setPayReduceNote(e.target.value)} placeholder="e.g. VAT, discount" />
+                                <select value={payReduceNote} onChange={(e) => setPayReduceNote(e.target.value)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none">
+                                    <option value="">Select reason</option>
+                                    <option value="VAT & Tax">VAT &amp; Tax</option>
+                                    <option value="Other">Other</option>
+                                </select>
                             </div>
                         </div>
-                        {(parseFloat(payReduceAmount) > 0) && (
-                            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
-                                Due: Tk {fmt$(paying?.amount_due || 0)} &minus; Reduce: Tk {fmt$(parseFloat(payReduceAmount) || 0)} = <strong>Tk {fmt$(Math.max(0, (paying?.amount_due || 0) - (parseFloat(payReduceAmount) || 0)))}</strong>
+                        {payReduceNote === 'Other' && (
+                            <div className="grid gap-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">Custom Reduce Note</Label>
+                                <Input type="text" value={payReduceOtherNote || ''} onChange={(e) => setPayReduceOtherNote(e.target.value)} placeholder="Enter custom reason" />
                             </div>
                         )}
                         <div className="grid grid-cols-2 gap-4">
@@ -511,10 +478,12 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                 </select>
                             </div>
                         </div>
-                        <div className="grid gap-1.5">
-                            <Label className="text-xs font-medium text-muted-foreground">Reference Number</Label>
-                            <Input type="text" value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Transaction/Cheque number" />
-                        </div>
+                        {payMethod !== 'cash' && (
+                            <div className="grid gap-1.5">
+                                <Label className="text-xs font-medium text-muted-foreground">Reference Number</Label>
+                                <Input type="text" value={payRef} onChange={(e) => setPayRef(e.target.value)} placeholder="Transaction/Cheque number" />
+                            </div>
+                        )}
                         <div className="grid gap-1.5">
                             <Label className="text-xs font-medium text-muted-foreground">Notes</Label>
                             <Input type="text" value={payNotes} onChange={(e) => setPayNotes(e.target.value)} placeholder="Payment notes" />
@@ -528,16 +497,18 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                 <option value="due">Due</option>
                             </select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">Customer Bank Name</Label>
-                                <Input type="text" value={payCustomerBank} onChange={(e) => setPayCustomerBank(e.target.value)} placeholder="Customer bank name" />
+                        {payMethod !== 'cash' && (
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs font-medium text-muted-foreground">Customer Bank Name</Label>
+                                    <Input type="text" value={payCustomerBank} onChange={(e) => setPayCustomerBank(e.target.value)} placeholder="Customer bank name" />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label className="text-xs font-medium text-muted-foreground">Your Bank Name</Label>
+                                    <Input type="text" value={payUserBank} onChange={(e) => setPayUserBank(e.target.value)} placeholder="Your bank name" />
+                                </div>
                             </div>
-                            <div className="grid gap-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">Your Bank Name</Label>
-                                <Input type="text" value={payUserBank} onChange={(e) => setPayUserBank(e.target.value)} placeholder="Your bank name" />
-                            </div>
-                        </div>
+                        )}
                         <div className="grid gap-1.5">
                             <Label className="text-xs font-medium text-muted-foreground">Attachment</Label>
                             <div className="flex items-center gap-2">
@@ -585,170 +556,6 @@ export default function Payments({ parties }: { parties: Party[] }) {
                 </DialogContent>
             </Dialog>
 
-            {/* Payment History Dialog */}
-            <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader className="space-y-1 border-b border-border pb-4">
-                        <DialogTitle className="flex items-center gap-2 text-base">
-                            <History className="size-4.5 text-muted-foreground" />
-                            Payment History &mdash; {historyInvoice?.invoice_number}
-                        </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-3">
-                        {paymentHistory.length === 0 ? (
-                            <p className="py-4 text-center text-sm text-muted-foreground">No payments recorded yet</p>
-                        ) : (
-                            <div className="overflow-hidden rounded-lg border border-border">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-border bg-muted/50">
-                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Date</th>
-                                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Amount</th>
-                                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Reduce</th>
-                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Method</th>
-                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
-                                            <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase text-muted-foreground">File</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {paymentHistory.map((p) => (
-                                            <tr key={p.id} className="border-t border-border first:border-t-0">
-                                                <td className="px-3 py-2 text-xs">{fmtDate(p.payment_date)}</td>
-                                                <td className="px-3 py-2 text-right text-xs font-semibold text-green-600">Tk {fmt$(p.amount)}</td>
-                                                <td className="px-3 py-2 text-right text-xs text-muted-foreground">
-                                                    {p.reduce_amount ? (
-                                                        <div>
-                                                            <span className="text-amber-600 font-medium">-Tk {fmt$(p.reduce_amount)}</span>
-                                                            {p.reduce_note && <div className="text-[10px] text-amber-500">{p.reduce_note}</div>}
-                                                        </div>
-                                                    ) : '—'}
-                                                </td>
-                                                <td className="px-3 py-2 text-xs text-muted-foreground">{p.payment_method || '—'}</td>
-                                                <td className="px-3 py-2 text-xs">
-                                                    {p.payment_status ? (
-                                                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${p.payment_status === 'paid' ? 'bg-green-100 text-green-700' : p.payment_status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
-                                                            {p.payment_status}
-                                                        </span>
-                                                    ) : '—'}
-                                                </td>
-                                                <td className="px-3 py-2 text-center">
-                                                    {p.attachment ? (
-                                                        <a href={p.attachment} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-                                                            <FileText className="size-3" />
-                                                            <span className="text-[10px]">View</span>
-                                                        </a>
-                                                    ) : '—'}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* Bulk Report Dialog */}
-            <Dialog open={reportOpen} onOpenChange={setReportOpen}>
-                <DialogContent className="sm:max-w-3xl">
-                    <DialogHeader className="space-y-1 border-b border-border pb-4">
-                        <DialogTitle className="flex items-center gap-2 text-base">
-                            <FileDown className="size-4.5 text-muted-foreground" />
-                            Payment Report
-                        </DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div className="flex flex-wrap items-end gap-3">
-                            <div className="grid gap-1.5">
-                                <Label className="text-[10px] font-semibold uppercase text-muted-foreground">Party</Label>
-                                <select value={reportParty} onChange={(e) => setReportParty(e.target.value)} className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none">
-                                    <option value="">All Parties</option>
-                                    {parties.map((p) => (
-                                        <option key={p.id} value={p.id}>{p.party_name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label className="text-[10px] font-semibold uppercase text-muted-foreground">From</Label>
-                                <Input type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} className="h-8 w-36 text-xs" />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label className="text-[10px] font-semibold uppercase text-muted-foreground">To</Label>
-                                <Input type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} className="h-8 w-36 text-xs" />
-                            </div>
-                            <div className="grid gap-1.5">
-                                <Label className="text-[10px] font-semibold uppercase text-muted-foreground">Status</Label>
-                                <select value={reportStatus} onChange={(e) => setReportStatus(e.target.value)} className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none">
-                                    <option value="">All</option>
-                                    <option value="pending">Unpaid</option>
-                                    <option value="paid">Paid</option>
-                                    <option value="partial">Partial</option>
-                                </select>
-                            </div>
-                            <Button size="sm" onClick={fetchReport}>Filter</Button>
-                            <Button size="sm" variant="default" onClick={exportBulkReport} disabled={!reportSummary}>
-                                <FileDown className="mr-1 size-3" />
-                                Export PDF
-                            </Button>
-                        </div>
-
-                        {reportSummary && (
-                            <div className="grid grid-cols-4 gap-4 rounded-lg border border-border bg-muted/30 p-4 text-sm">
-                                <div>
-                                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Invoices</span>
-                                    <p className="font-semibold">{reportSummary.total_invoices}</p>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Total</span>
-                                    <p className="font-semibold">Tk {fmt$(reportSummary.total_amount)}</p>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Paid</span>
-                                    <p className="font-semibold text-green-600">Tk {fmt$(reportSummary.total_paid)}</p>
-                                </div>
-                                <div>
-                                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">Due</span>
-                                    <p className="font-semibold text-red-600">Tk {fmt$(reportSummary.total_due)}</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {reportData.length > 0 && (
-                            <div className="overflow-hidden rounded-lg border border-border">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-border bg-muted/50">
-                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Invoice</th>
-                                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-muted-foreground">Party</th>
-                                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Amount</th>
-                                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Paid</th>
-                                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase text-muted-foreground">Due</th>
-                                            <th className="px-3 py-2 text-center text-[10px] font-semibold uppercase text-muted-foreground">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {reportData.map((inv, i) => (
-                                            <tr key={i} className="border-t border-border first:border-t-0">
-                                                <td className="px-3 py-2 font-mono text-xs font-semibold">{inv.invoice_number}</td>
-                                                <td className="px-3 py-2 text-xs">{inv.party_name}</td>
-                                                <td className="px-3 py-2 text-right text-xs">Tk {fmt$(inv.total_amount)}</td>
-                                                <td className="px-3 py-2 text-right text-xs text-green-600">Tk {fmt$(inv.amount_paid)}</td>
-                                                <td className="px-3 py-2 text-right text-xs text-red-600">Tk {fmt$(inv.amount_due)}</td>
-                                                <td className="px-3 py-2 text-center">
-                                                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColors[inv.status] || 'bg-slate-100 text-slate-600'}`}>
-                                                        {inv.status}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
         </>
     );
 }

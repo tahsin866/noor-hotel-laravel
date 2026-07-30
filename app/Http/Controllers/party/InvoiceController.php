@@ -21,8 +21,9 @@ class InvoiceController extends Controller
         $partyId = $request->get('party_id');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
+        $search = $request->get('search');
 
-        $query = Invoice::with(['party'])
+        $query = Invoice::with(['party', 'items.product'])
             ->orderByDesc('created_at');
 
         if ($status) {
@@ -37,6 +38,17 @@ class InvoiceController extends Controller
         if ($dateTo) {
             $query->where('date', '<=', $dateTo);
         }
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('invoice_number', 'like', "%{$search}%")
+                    ->orWhereHas('items.product', function ($pq) use ($search) {
+                        $pq->where('customer_po_number', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('party', function ($pq) use ($search) {
+                        $pq->where('party_name', 'like', "%{$search}%");
+                    });
+            });
+        }
 
         $total = $query->count();
         $items = $query->skip(($page - 1) * $limit)->take($limit)->get();
@@ -47,6 +59,7 @@ class InvoiceController extends Controller
                 'invoice_number' => $item->invoice_number,
                 'party_id' => $item->party_id,
                 'party_name' => $item->party->party_name ?? '-',
+                'customer_po_number' => $item->items->first()?->product?->customer_po_number,
                 'date' => $item->date,
                 'due_date' => $item->due_date,
                 'total_amount' => $item->total_amount,
@@ -135,6 +148,8 @@ class InvoiceController extends Controller
             ];
         });
 
+        $customerPoNumber = $invoice->items->first()?->product->customer_po_number ?? null;
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -152,6 +167,7 @@ class InvoiceController extends Controller
                 'amount_due' => $invoice->amount_due,
                 'status' => $invoice->status,
                 'notes' => $invoice->notes,
+                'customer_po_number' => $customerPoNumber,
                 'items' => $items,
                 'challans' => $challans,
             ],
@@ -522,7 +538,7 @@ class InvoiceController extends Controller
 
         $totalInWords = $this->numberToWords($invoice->total_amount);
 
-        $customerPoNumber = $invoice->items->first()?->product->customer_po_number ?? '-';
+        $customerPoNumber = $invoice->items->first()?->product->customer_po_number ?? null;
 
         $data = [
             'invoice' => $invoice,

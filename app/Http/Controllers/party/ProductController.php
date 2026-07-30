@@ -30,20 +30,27 @@ class ProductController extends Controller
         }
 
         if ($status && $status !== 'all') {
-            $query->whereHas('meals', function ($q) use ($status) {
-                $q->groupBy('product_id');
-                if ($status === 'delivered') {
-                    $q->havingRaw('SUM(delivered_quantity) >= SUM(quantity)');
-                } elseif ($status === 'partial') {
-                    $q->havingRaw('SUM(delivered_quantity) > 0');
-                    $q->havingRaw('SUM(delivered_quantity) < SUM(quantity)');
-                } elseif ($status === 'pending') {
-                    $q->havingRaw('SUM(delivered_quantity) = 0');
-                }
-            });
+            if ($status === 'delivered') {
+                $query->whereDoesntHave('meals', function ($q) {
+                    $q->whereColumn('delivered_quantity', '<', 'quantity');
+                })->whereHas('meals');
+            } elseif ($status === 'partial') {
+                $query->whereHas('meals', function ($q) {
+                    $q->where('delivered_quantity', '>', 0);
+                })->whereHas('meals', function ($q) {
+                    $q->whereColumn('delivered_quantity', '<', 'quantity');
+                });
+            } elseif ($status === 'pending') {
+                $query->whereDoesntHave('meals', function ($q) {
+                    $q->where('delivered_quantity', '>', 0);
+                });
+            }
         }
 
-        $products = $query->orderByDesc('products.id')->paginate(10);
+        $limit = $request->integer('limit', 10);
+        $limit = in_array($limit, [10, 20, 50, 100]) ? $limit : 10;
+
+        $products = $query->orderByDesc('products.id')->paginate($limit);
 
         return response()->json([
             'items' => $products->items(),
@@ -56,12 +63,12 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'unit' => 'required|string|max:50',
-            'vat_rate' => 'nullable|numeric|min:0',
+            'vat_rate' => 'nullable|numeric',
             'party_id' => 'nullable|exists:parties,id',
             'customer_po_number' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'meals' => 'required|array|min:1',
-            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snack',
+            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snack,morning_snacks,evening_snacks,hot_meal',
             'meals.*.quantity' => 'required|integer|min:0',
             'meals.*.unit_price' => 'required|numeric|min:0',
             'meals.*.description' => 'nullable|string',
@@ -110,12 +117,12 @@ class ProductController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'unit' => 'required|string|max:50',
-            'vat_rate' => 'nullable|numeric|min:0',
+            'vat_rate' => 'nullable|numeric',
             'party_id' => 'nullable|exists:parties,id',
             'customer_po_number' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'meals' => 'required|array|min:1',
-            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snack',
+            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snack,morning_snacks,evening_snacks,hot_meal',
             'meals.*.quantity' => 'required|integer|min:0',
             'meals.*.unit_price' => 'required|numeric|min:0',
             'meals.*.description' => 'nullable|string',

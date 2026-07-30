@@ -44,7 +44,9 @@
                 <div style="display:inline-block; text-align:left; margin-top:4px;">
                     <strong>Invoice Date:</strong> {{ \Carbon\Carbon::parse($invoice->date)->format('d/m/Y') }}<br/><br/>
                     <strong>Ref:</strong> {{ $invoice->invoice_number }}<br/><br/>
-                    <strong>Customer PO:</strong> {{ $customer_po_number }}
+                    @if($customer_po_number)
+                        <strong>Customer PO:</strong> {{ $customer_po_number }}<br/>
+                    @endif
                 </div>
             </td>
         </tr>

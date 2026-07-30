@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { LayoutGrid, Users, ShoppingCart, FileText, CreditCard, BarChart3, Truck, Shield, Lock, UserCog, ShieldCheck } from 'lucide-react';
+import { LayoutGrid, Users, ShoppingCart, FileText, CreditCard, BarChart3, Truck, Shield, Lock, UserCog, ShieldCheck, Inbox } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -59,6 +59,11 @@ const mainNavItems: NavItem[] = [
         title: 'Security',
         href: editSecurity(),
         icon: ShieldCheck,
+    },
+    {
+        title: 'Emails',
+        href: '/emails',
+        icon: Inbox,
     },
 ];
 

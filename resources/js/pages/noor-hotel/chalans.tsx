@@ -36,6 +36,7 @@ import {
     AlertTriangle,
     CheckSquare,
     Square,
+    Undo2,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -296,6 +297,7 @@ function ChallanForm({
                                             min={0}
                                             max={it.max}
                                             onChange={(e) => updateItemQty(idx, parseInt(e.target.value) || 0)}
+                                            onWheel={(e) => (e.target as HTMLInputElement).blur()}
                                         />
                                         <span className="w-24 text-right text-xs font-semibold tabular-nums">
                                             ৳{fmt$(it.quantity * it.unit_price)}
@@ -327,6 +329,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
     const [challans, setChallans] = useState<Challan[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(10);
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
     const [partyFilter, setPartyFilter] = useState('');
@@ -353,7 +356,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
         try {
             const params = new URLSearchParams();
             params.set('page', String(page));
-            params.set('limit', '10');
+            params.set('limit', String(limit));
             if (filter !== 'all') params.set('status', filter);
             if (search) params.set('search', search);
             if (partyFilter) params.set('party_id', partyFilter);
@@ -366,7 +369,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
         } catch {
             toast.error('Failed to load challans');
         }
-    }, [page, filter, search, partyFilter]);
+    }, [page, limit, filter, search, partyFilter]);
 
     useEffect(() => {
         fetchChallans();
@@ -628,6 +631,44 @@ export default function Challans({ products, parties }: { products: Product[]; p
         }
     };
 
+    const returnToPending = async (id: number) => {
+        try {
+            const res = await fetch(`/api/challans/${id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ status: 'pending' }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast.success('Challan returned to pending');
+                fetchChallans();
+            } else {
+                toast.error(data.message || 'Something went wrong.');
+            }
+        } catch {
+            toast.error('Something went wrong.');
+        }
+    };
+
+    const returnToDispatched = async (id: number) => {
+        try {
+            const res = await fetch(`/api/challans/${id}/status`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ status: 'dispatched' }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast.success('Challan returned to dispatched');
+                fetchChallans();
+            } else {
+                toast.error(data.message || 'Something went wrong.');
+            }
+        } catch {
+            toast.error('Something went wrong.');
+        }
+    };
+
     const printChallan = async (id: number) => {
         try {
             const res = await fetch(`/api/challans/${id}`, {
@@ -640,7 +681,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                 return;
             }
 
-                            const rows = (c.items || [])
+                            const rows = (c.items || []).filter((it: ChlItem) => it.quantity > 0)
                 .map(
                     (it: ChlItem, i: number) =>
                             `<tr>
@@ -663,40 +704,46 @@ export default function Challans({ products, parties }: { products: Product[]; p
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
         table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
         .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
-        .content-wrapper { position: relative; min-height: 760px; }
-        .footer { position: absolute; bottom: 0; left: 0; right: 0; text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
-        .signatures { position: absolute; bottom: 30px; left: 0; right: 0; }
+        .content-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: auto; }
+        .signatures { margin-top: 30px; }
+        .body-content { flex: 1; }
     </style>
 </head>
 <body>
     <div class="content-wrapper">
-        <h1>DELIVERY CHALLAN</h1>
-        <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
-            <tr>
-                <td style="border:none;padding:4px 0;"><strong>Party:</strong> ${c.party_name || '—'}</td>
-                <td style="border:none;padding:4px 0;text-align:right;"><strong>Challan No:</strong> ${c.challan_number}</td>
-            </tr>
-            <tr>
-                <td style="border:none;padding:4px 0;max-width:50%;overflow-wrap:break-word;word-wrap:break-word;"><strong>Address:</strong> ${c.address || '—'}</td>
-                <td style="border:none;padding:4px 0;text-align:right;"><strong>PO:</strong> ${c.po_number || '—'}</td>
-            </tr>
-            <tr>
-                <td style="border:none;padding:4px 0;"></td>
-                <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
-            </tr>
-        </table>
-        <table class="items">
-            <thead>
+        <div class="body-content">
+            <h1>DELIVERY CHALLAN</h1>
+            <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
                 <tr>
-                    <th style="width:20px;">SL</th>
-                    <th>Product / Item</th>
-                    <th style="width:50px;text-align:left;">Meal</th>
-                    <th style="width:50px;text-align:center;">Qty</th>
+                    <td style="border:none;padding:4px 0;"><strong>Party:</strong> ${c.party_name || '—'}</td>
+                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Challan No:</strong> ${c.challan_number}</td>
                 </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-        </table>
-        ${c.notes ? `<div class="notes"><strong>Notes:</strong> ${c.notes}</div>` : ''}
+                ${c.customer_po_number && c.customer_po_number !== '-' ? `<tr>
+                    <td style="border:none;padding:4px 0;max-width:50%;overflow-wrap:break-word;word-wrap:break-word;"><strong>Address:</strong> ${c.address || '—'}</td>
+                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Customer PO:</strong> ${c.customer_po_number}</td>
+                </tr>` : `<tr>
+                    <td style="border:none;padding:4px 0;max-width:50%;overflow-wrap:break-word;word-wrap:break-word;"><strong>Address:</strong> ${c.address || '—'}</td>
+                    <td style="border:none;padding:4px 0;text-align:right;"><strong>PO:</strong> ${c.po_number || '—'}</td>
+                </tr>`}
+                <tr>
+                    <td style="border:none;padding:4px 0;"></td>
+                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
+                </tr>
+            </table>
+            <table class="items">
+                <thead>
+                    <tr>
+                        <th style="width:20px;">SL</th>
+                        <th>Product / Item</th>
+                        <th style="width:50px;text-align:left;">Meal</th>
+                        <th style="width:50px;text-align:center;">Qty</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+            ${c.notes ? `<div class="notes"><strong>Notes:</strong> ${c.notes}</div>` : ''}
+        </div>
         <div class="signatures">
             <table style="width:100%;border:none;">
                 <tr>
@@ -731,8 +778,9 @@ export default function Challans({ products, parties }: { products: Product[]; p
         }
     };
 
-    const totalPages = Math.ceil(total / 10);
-
+    const totalPages = Math.ceil(total / limit);
+    const from = total === 0 ? 0 : (page - 1) * limit + 1;
+    const to = Math.min(page * limit, total);
     const filteredProducts = formParty
         ? products.filter((p) => String(p.party_id) === formParty)
         : products;
@@ -826,22 +874,120 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                 className="h-7 text-xs"
                                 onClick={async () => {
                                     try {
-                                        const res = await fetch(`/api/challans/print-batch?download=1`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-                                            body: JSON.stringify({ ids: Array.from(selectedIds) }),
-                                        });
-                                        if (res.ok) {
-                                            const blob = await res.blob();
-                                            const url = window.URL.createObjectURL(blob);
-                                            const a = document.createElement('a');
-                                            a.href = url;
-                                            a.download = 'challans-batch.pdf';
-                                            a.click();
-                                            window.URL.revokeObjectURL(url);
-                                        } else {
-                                            toast.error('Failed to print challans');
+                                        let combinedHtml = '';
+                                        let idx = 0;
+                                        for (const id of selectedIds) {
+                                            const res = await fetch(`/api/challans/${id}`, {
+                                                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                                            });
+                                            const data = await res.json();
+                                            const c = data.data;
+                                            if (!c) continue;
+
+                                            const rows = (c.items || []).filter((it: ChlItem) => it.quantity > 0).map(
+                                                (it: ChlItem, i: number) =>
+                                                    `<tr>
+                                                        <td style="width:20px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
+                                                        <td style="padding:6px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
+                                                        <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;">${it.meal_type.charAt(0).toUpperCase() + it.meal_type.slice(1)}</td>
+                                                        <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
+                                                    </tr>`
+                                            ).join('');
+
+                                            const customerPoRow = c.customer_po_number && c.customer_po_number !== '-'
+                                                ? `<tr><td style="border:none;padding:4px 0;max-width:50%;overflow-wrap:break-word;word-wrap:break-word;"><strong>Address:</strong> ${c.address || '—'}</td><td style="border:none;padding:4px 0;text-align:right;"><strong>Customer PO:</strong> ${c.customer_po_number}</td></tr>`
+                                                : `<tr><td style="border:none;padding:4px 0;max-width:50%;overflow-wrap:break-word;word-wrap:break-word;"><strong>Address:</strong> ${c.address || '—'}</td><td style="border:none;padding:4px 0;text-align:right;"><strong>PO:</strong> ${c.po_number || '—'}</td></tr>`;
+
+                                            combinedHtml += `
+                                                <div class="challan-page">
+                                                    <div class="content-wrapper">
+                                                        <div class="body-content">
+                                                            <h1>DELIVERY CHALLAN</h1>
+                                                            <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
+                                                                <tr>
+                                                                    <td style="border:none;padding:4px 0;"><strong>Party:</strong> ${c.party_name || '—'}</td>
+                                                                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Challan No:</strong> ${c.challan_number}</td>
+                                                                </tr>
+                                                                ${customerPoRow}
+                                                                <tr>
+                                                                    <td style="border:none;padding:4px 0;"></td>
+                                                                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
+                                                                </tr>
+                                                            </table>
+                                                            <table class="items">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th style="width:20px;">SL</th>
+                                                                        <th>Product / Item</th>
+                                                                        <th style="width:50px;text-align:left;">Meal</th>
+                                                                        <th style="width:50px;text-align:center;">Qty</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>${rows}</tbody>
+                                                            </table>
+                                                            ${c.notes ? `<div class="notes"><strong>Notes:</strong> ${c.notes}</div>` : ''}
+                                                        </div>
+                                                        <div class="signatures">
+                                                            <table style="width:100%;border:none;">
+                                                                <tr>
+                                                                    <td style="width:45%;border:none;text-align:center;padding:0;">
+                                                                        <div style="height:40px;"></div>
+                                                                        <div style="border-top:1px solid #1e293b;"></div>
+                                                                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
+                                                                    </td>
+                                                                    <td style="width:10%;border:none;"></td>
+                                                                    <td style="width:45%;border:none;text-align:center;padding:0;">
+                                                                        <div style="height:40px;"></div>
+                                                                        <div style="border-top:1px solid #1e293b;"></div>
+                                                                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
+                                                                    </td>
+                                                                </tr>
+                                                            </table>
+                                                        </div>
+                                                        <div class="footer">Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; Noor Hotel PRG</div>
+                                                    </div>
+                                                </div>`;
+                                            idx++;
                                         }
+
+                                        if (!combinedHtml) {
+                                            toast.error('Failed to load challans');
+                                            return;
+                                        }
+
+                                        const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Challans Batch Print</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
+        h1 { font-size: 22px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; text-align: center; padding-bottom: 12px; margin-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.items td { padding: 8px 12px; border: 1px solid #000; }
+        .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
+        .content-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: auto; }
+        .signatures { margin-top: 30px; }
+        .challan-page { page-break-after: always; display: flex; flex-direction: column; }
+        .challan-page:last-child { page-break-after: avoid; }
+        .body-content { flex: 1; }
+    </style>
+</head>
+<body>
+    ${combinedHtml}
+</body>
+</html>`;
+
+                                        const win = window.open('', '_blank');
+                                        if (win) {
+                                            win.document.write(html);
+                                            win.document.close();
+                                            win.focus();
+                                            win.print();
+                                        }
+                                        setSelectedIds(new Set());
                                     } catch {
                                         toast.error('Failed to print challans');
                                     }
@@ -1047,6 +1193,23 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                                                         <Send className="size-3.5" />
                                                                         Mark Delivered
                                                                     </DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => returnToPending(c.id)}>
+                                                                        <Undo2 className="size-3.5" />
+                                                                        Return to Pending
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem variant="destructive" onClick={() => cancelChallan(c.id)}>
+                                                                        <Trash2 className="size-3.5" />
+                                                                        Cancel
+                                                                    </DropdownMenuItem>
+                                                                </>
+                                                            )}
+                                                            {c.status === 'delivered' && (
+                                                                <>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem onClick={() => returnToDispatched(c.id)}>
+                                                                        <Undo2 className="size-3.5" />
+                                                                        Return to Dispatched
+                                                                    </DropdownMenuItem>
                                                                     <DropdownMenuItem variant="destructive" onClick={() => cancelChallan(c.id)}>
                                                                         <Trash2 className="size-3.5" />
                                                                         Cancel
@@ -1070,19 +1233,32 @@ export default function Challans({ products, parties }: { products: Product[]; p
                     </div>
                 </div>
 
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
-                        <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
-                        <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                                <ChevronLeft className="mr-1 size-3.5" /> Previous
-                            </Button>
-                            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-                                Next <ChevronRight className="ml-1 size-3.5" />
-                            </Button>
-                        </div>
+                <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground">
+                            {from}–{to} of {total}
+                        </span>
+                        <select
+                            value={limit}
+                            onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                            className="flex h-7 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                        >
+                            {[10, 20, 50, 100].map((v) => (
+                                <option key={v} value={v}>{v}</option>
+                            ))}
+                        </select>
+                        <span className="text-xs text-muted-foreground">per page</span>
                     </div>
-                )}
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                            <ChevronLeft className="mr-1 size-3.5" /> Previous
+                        </Button>
+                        <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+                        <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                            Next <ChevronRight className="ml-1 size-3.5" />
+                        </Button>
+                    </div>
+                </div>
             </div>
 
             {/* Create Dialog */}
@@ -1161,7 +1337,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {viewing.items.map((it, i) => {
+                                        {viewing.items.filter((it) => it.quantity > 0).map((it, i) => {
                                             const line = it.quantity * (it.unit_price || 0);
                                             return (
                                                 <tr key={i} className="border-t border-border first:border-t-0">

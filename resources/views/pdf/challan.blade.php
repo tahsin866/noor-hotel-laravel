@@ -38,10 +38,17 @@
                 <td style="width:50%;border:none;padding:4px 0;"><strong>Challan No:</strong> {{ $challan->challan_number }}</td>
                 <td style="width:50%;border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> {{ \Carbon\Carbon::parse($challan->date)->format('d/m/Y') }}</td>
             </tr>
+            @if($customer_po_number && $customer_po_number !== '-' && $customer_po_number !== '')
             <tr>
-                <td style="border:none;padding:4px 0;"><strong>PO:</strong> {{ $customer_po_number }}</td>
+                <td style="border:none;padding:4px 0;"><strong>Customer PO:</strong> {{ $customer_po_number }}</td>
                 <td style="border:none;padding:4px 0;text-align:right;"><strong>Product:</strong> {{ $product_name }}</td>
             </tr>
+            @else
+            <tr>
+                <td style="border:none;padding:4px 0;"></td>
+                <td style="border:none;padding:4px 0;text-align:right;"><strong>Product:</strong> {{ $product_name }}</td>
+            </tr>
+            @endif
             <tr>
                 <td style="border:none;padding:4px 0;"><strong>Party:</strong> {{ $party_name }}</td>
             </tr>

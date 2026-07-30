@@ -17,9 +17,39 @@ class PartyController extends Controller
     /**
      * Display a listing of parties.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $parties = Party::latest()->get();
+        $query = Party::query();
+
+        if ($search = $request->search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('party_name', 'like', "%{$search}%")
+                    ->orWhere('contact_person', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('party_type')) {
+            $query->where('party_type', $request->party_type);
+        }
+
+        if ($request->filled('agreement_type')) {
+            $query->where('agreement_type', $request->agreement_type);
+        }
+
+        if ($request->filled('end_date_from')) {
+            $query->whereDate('end_date', '>=', $request->end_date_from);
+        }
+
+        if ($request->filled('end_date_to')) {
+            $query->whereDate('end_date', '<=', $request->end_date_to);
+        }
+
+        $perPage = $request->integer('per_page', 10);
+        $perPage = in_array($perPage, [10, 20, 50, 100]) ? $perPage : 10;
+
+        $parties = $query->latest()->paginate($perPage);
 
         return Inertia::render('noor-hotel/party', [
             'parties' => $parties,

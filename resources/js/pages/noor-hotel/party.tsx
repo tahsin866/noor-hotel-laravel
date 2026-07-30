@@ -20,9 +20,20 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    ChevronLeft,
+    ChevronRight,
+    FileDown,
+    Pencil,
+    Plus,
+    Printer,
+    Search,
+    Trash2,
+    X,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { Pencil, Plus, Printer, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 
 type Party = {
     id: number;
@@ -37,6 +48,25 @@ type Party = {
     start_date: string;
     end_date: string;
     notes: string;
+};
+
+type PaginatedData<T> = {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    from: number;
+    to: number;
+};
+
+type Filters = {
+    search: string;
+    party_type: string;
+    agreement_type: string;
+    end_date_from: string;
+    end_date_to: string;
+    per_page: number;
 };
 
 const emptyParty: Party = {
@@ -54,7 +84,16 @@ const emptyParty: Party = {
     notes: '',
 };
 
-export default function Party({ parties }: { parties: Party[] }) {
+const emptyFilters: Filters = {
+    search: '',
+    party_type: '',
+    agreement_type: '',
+    end_date_from: '',
+    end_date_to: '',
+    per_page: 10,
+};
+
+export default function Party({ parties }: { parties: PaginatedData<Party> }) {
     const [addOpen, setAddOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -62,6 +101,66 @@ export default function Party({ parties }: { parties: Party[] }) {
     const [deletingParty, setDeletingParty] = useState<Party>(emptyParty);
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const [filters, setFilters] = useState<Filters>(emptyFilters);
+    const searchRef = useRef<HTMLInputElement>(null);
+    const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+    const applyFilters = (overrides: Partial<Filters> = {}) => {
+        const params: Record<string, string | number> = {};
+        const merged = { ...filters, ...overrides };
+
+        if (merged.search) params.search = merged.search;
+        if (merged.party_type) params.party_type = merged.party_type;
+        if (merged.agreement_type) params.agreement_type = merged.agreement_type;
+        if (merged.end_date_from) params.end_date_from = merged.end_date_from;
+        if (merged.end_date_to) params.end_date_to = merged.end_date_to;
+        if (merged.per_page !== 10) params.per_page = merged.per_page;
+
+        router.get('/party', params, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    const goToPage = (page: number) => {
+        const params: Record<string, string | number> = { page };
+        if (filters.search) params.search = filters.search;
+        if (filters.party_type) params.party_type = filters.party_type;
+        if (filters.agreement_type) params.agreement_type = filters.agreement_type;
+        if (filters.end_date_from) params.end_date_from = filters.end_date_from;
+        if (filters.end_date_to) params.end_date_to = filters.end_date_to;
+        if (filters.per_page !== 10) params.per_page = filters.per_page;
+
+        router.get('/party', params, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    const handleSearchChange = (value: string) => {
+        setFilters((prev) => ({ ...prev, search: value }));
+        clearTimeout(searchTimer.current);
+        searchTimer.current = setTimeout(() => {
+            applyFilters({ search: value });
+        }, 400);
+    };
+
+    const clearFilters = () => {
+        setFilters(emptyFilters);
+        router.get('/party', {}, { preserveState: true, preserveScroll: true });
+    };
+
+    const hasActiveFilters =
+        filters.search ||
+        filters.party_type ||
+        filters.agreement_type ||
+        filters.end_date_from ||
+        filters.end_date_to;
+
+    useEffect(() => {
+        return () => clearTimeout(searchTimer.current);
+    }, []);
 
     const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -275,6 +374,7 @@ export default function Party({ parties }: { parties: Party[] }) {
                         <SelectValue placeholder="Select agreement type" />
                     </SelectTrigger>
                     <SelectContent>
+                        <SelectItem value="no-agreement">No Agreement</SelectItem>
                         <SelectItem value="annual">Annual</SelectItem>
                         <SelectItem value="monthly">Monthly</SelectItem>
                         <SelectItem value="quarterly">Quarterly</SelectItem>
@@ -322,10 +422,31 @@ export default function Party({ parties }: { parties: Party[] }) {
         </>
     );
 
+    const exportToExcel = () => {
+        const data = parties.data.map((p) => ({
+            'Party Name': p.party_name,
+            Type: p.party_type,
+            'Contact Person': p.contact_person,
+            Designation: p.contact_person_designation,
+            Phone: p.phone,
+            Email: p.email,
+            Address: p.address,
+            'Agreement Type': p.agreement_type,
+            'Start Date': p.start_date,
+            'End Date': p.end_date,
+            Notes: p.notes,
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Parties');
+        XLSX.writeFile(wb, 'parties.xlsx');
+    };
+
     return (
         <>
             <Head title="Party Management" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4">
                 <div className="flex items-center justify-between">
                     <Heading
                         variant="small"
@@ -333,33 +454,122 @@ export default function Party({ parties }: { parties: Party[] }) {
                         description="Manage party information and agreements"
                     />
 
-                    <Dialog open={addOpen} onOpenChange={setAddOpen}>
-                        <DialogTrigger asChild>
-                            <Button>
-                                <Plus className="mr-2 size-4" />
-                                Add Party
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-2xl">
-                            <DialogHeader>
-                                <DialogTitle>Add New Party</DialogTitle>
-                                <DialogDescription>
-                                    Fill in the party details below.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <form onSubmit={handleAdd} className="space-y-4">
-                                <PartyFormFields prefix="add-" />
-                                <DialogFooter>
-                                    <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
-                                        Cancel
-                                    </Button>
-                                    <Button type="submit" disabled={processing}>
-                                        {processing ? 'Saving...' : 'Save Party'}
-                                    </Button>
-                                </DialogFooter>
-                            </form>
-                        </DialogContent>
-                    </Dialog>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={exportToExcel}>
+                            <FileDown className="mr-2 size-4" />
+                            Export Excel
+                        </Button>
+
+                        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+                            <DialogTrigger asChild>
+                                <Button>
+                                    <Plus className="mr-2 size-4" />
+                                    Add Party
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-2xl max-h-screen overflow-y-auto">
+                                <DialogHeader>
+                                    <DialogTitle>Add New Party</DialogTitle>
+                                    <DialogDescription>
+                                        Fill in the party details below.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <form onSubmit={handleAdd} className="space-y-4">
+                                    <PartyFormFields prefix="add-" />
+                                    <DialogFooter>
+                                        <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
+                                            Cancel
+                                        </Button>
+                                        <Button type="submit" disabled={processing}>
+                                            {processing ? 'Saving...' : 'Save Party'}
+                                        </Button>
+                                    </DialogFooter>
+                                </form>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+                </div>
+
+                {/* Filters */}
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            ref={searchRef}
+                            placeholder="Search by name, contact, phone or email..."
+                            value={filters.search}
+                            onChange={(e) => handleSearchChange(e.target.value)}
+                            className="pl-9"
+                        />
+                    </div>
+
+                    <Select
+                        value={filters.party_type}
+                        onValueChange={(value) => {
+                            setFilters((prev) => ({ ...prev, party_type: value }));
+                            applyFilters({ party_type: value });
+                        }}
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Party Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">All Types</SelectItem>
+                            <SelectItem value="supplier">Supplier</SelectItem>
+                            <SelectItem value="customer">Customer</SelectItem>
+                            <SelectItem value="both">Both</SelectItem>
+                            <SelectItem value="hotel">Hotel</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={filters.agreement_type}
+                        onValueChange={(value) => {
+                            setFilters((prev) => ({ ...prev, agreement_type: value }));
+                            applyFilters({ agreement_type: value });
+                        }}
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Agreement" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="">All Agreements</SelectItem>
+                            <SelectItem value="no-agreement">No Agreement</SelectItem>
+                            <SelectItem value="annual">Annual</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="quarterly">Quarterly</SelectItem>
+                            <SelectItem value="custom">Custom</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                    <Input
+                        type="date"
+                        value={filters.end_date_from}
+                        onChange={(e) => {
+                            setFilters((prev) => ({ ...prev, end_date_from: e.target.value }));
+                            applyFilters({ end_date_from: e.target.value });
+                        }}
+                    />
+
+                    <Input
+                        type="date"
+                        value={filters.end_date_to}
+                        onChange={(e) => {
+                            setFilters((prev) => ({ ...prev, end_date_to: e.target.value }));
+                            applyFilters({ end_date_to: e.target.value });
+                        }}
+                    />
+
+                    {hasActiveFilters ? (
+                        <Button variant="outline" onClick={clearFilters}>
+                            <X className="mr-2 size-4" />
+                            Reset Filters
+                        </Button>
+                    ) : (
+                        <div />
+                    )}
                 </div>
 
                 {/* Parties Table */}
@@ -379,14 +589,14 @@ export default function Party({ parties }: { parties: Party[] }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {parties.length === 0 ? (
+                            {parties.data.length === 0 ? (
                                 <tr>
                                     <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                                        No parties found. Click "Add Party" to create one.
+                                        No parties found.
                                     </td>
                                 </tr>
                             ) : (
-                                parties.map((party) => (
+                                parties.data.map((party) => (
                                     <tr key={party.id} className="border-b border-sidebar-border/70 last:border-0 dark:border-sidebar-border">
                                         <td className="px-4 py-3 font-medium">{party.party_name}</td>
                                         <td className="px-4 py-3 capitalize">{party.party_type}</td>
@@ -415,11 +625,95 @@ export default function Party({ parties }: { parties: Party[] }) {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination */}
+                {parties.total > 0 && (
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>
+                                Showing {parties.from}–{parties.to} of {parties.total}
+                            </span>
+
+                            <div className="flex items-center gap-1">
+                                <span>per page:</span>
+                                <Select
+                                    value={String(filters.per_page)}
+                                    onValueChange={(value) => {
+                                        const perPage = Number(value);
+                                        setFilters((prev) => ({ ...prev, per_page: perPage }));
+                                        const params: Record<string, string | number> = { per_page: perPage };
+                                        if (filters.search) params.search = filters.search;
+                                        if (filters.party_type) params.party_type = filters.party_type;
+                                        if (filters.agreement_type) params.agreement_type = filters.agreement_type;
+                                        if (filters.end_date_from) params.end_date_from = filters.end_date_from;
+                                        if (filters.end_date_to) params.end_date_to = filters.end_date_to;
+                                        router.get('/party', params, { preserveState: true, preserveScroll: true });
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 w-20">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="10">10</SelectItem>
+                                        <SelectItem value="20">20</SelectItem>
+                                        <SelectItem value="50">50</SelectItem>
+                                        <SelectItem value="100">100</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={parties.current_page <= 1}
+                                onClick={() => goToPage(parties.current_page - 1)}
+                            >
+                                <ChevronLeft className="size-4" />
+                            </Button>
+
+                            {Array.from({ length: parties.last_page }, (_, i) => i + 1)
+                                .filter((page) => {
+                                    const cur = parties.current_page;
+                                    const last = parties.last_page;
+                                    if (last <= 7) return true;
+                                    if (page === 1 || page === last) return true;
+                                    if (page >= cur - 1 && page <= cur + 1) return true;
+                                    return false;
+                                })
+                                .map((page, idx, arr) => (
+                                    <span key={page} className="flex items-center">
+                                        {idx > 0 && arr[idx - 1] !== page - 1 && (
+                                            <span className="px-1 text-muted-foreground">...</span>
+                                        )}
+                                        <Button
+                                            variant={parties.current_page === page ? 'default' : 'ghost'}
+                                            size="sm"
+                                            className="min-w-9"
+                                            onClick={() => goToPage(page)}
+                                        >
+                                            {page}
+                                        </Button>
+                                    </span>
+                                ))}
+
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={parties.current_page >= parties.last_page}
+                                onClick={() => goToPage(parties.current_page + 1)}
+                            >
+                                <ChevronRight className="size-4" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Edit Dialog */}
             <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="sm:max-w-2xl max-h-screen overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Edit Party</DialogTitle>
                         <DialogDescription>

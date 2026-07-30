@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmailedPurchaseOrdersController;
 use App\Http\Controllers\party\PartyController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RoleController;
@@ -93,6 +94,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'parties' => $parties,
         ]);
     })->name('payments');
+
+    Route::get('emails', EmailedPurchaseOrdersController::class)->name('emails');
 
     Route::middleware(['role:super_admin,admin'])->prefix('admin')->name('admin.')->group(function () {
         Route::get('users', [UserController::class, 'index'])->name('users.index');

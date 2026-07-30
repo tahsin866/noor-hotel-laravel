@@ -24,6 +24,7 @@ import {
     Plus,
     Printer,
     FileText,
+    FileDown,
     ChevronLeft,
     ChevronRight,
     Receipt,
@@ -31,6 +32,7 @@ import {
     Trash2,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
 
 type Party = { id: number; party_name: string };
 
@@ -101,6 +103,7 @@ type Invoice = {
     status: string;
     subtotal?: number;
     total_vat?: number;
+    customer_po_number?: string;
     notes?: string;
     items?: InvoiceItem[];
     challans?: InvoiceChallan[];
@@ -141,10 +144,12 @@ export default function Invoices({ parties, products, challans }: { parties: Par
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(10);
     const [filter, setFilter] = useState('all');
     const [partyFilter, setPartyFilter] = useState('');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
+    const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [createOpen, setCreateOpen] = useState(false);
     const [viewOpen, setViewOpen] = useState(false);
@@ -165,11 +170,12 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         try {
             const params = new URLSearchParams();
             params.set('page', String(page));
-            params.set('limit', '10');
+            params.set('limit', String(limit));
             if (filter !== 'all') params.set('status', filter);
             if (partyFilter) params.set('party_id', partyFilter);
             if (dateFrom) params.set('date_from', dateFrom);
             if (dateTo) params.set('date_to', dateTo);
+            if (search) params.set('search', search);
             const res = await fetch(`/api/invoices?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -179,7 +185,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         } catch {
             toast.error('Failed to load invoices');
         }
-    }, [page, filter, partyFilter, dateFrom, dateTo]);
+    }, [page, limit, filter, partyFilter, dateFrom, dateTo, search]);
 
     useEffect(() => {
         fetchInvoices();
@@ -372,7 +378,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 <div style="display:inline-block;text-align:left;margin-top:4px;">
                     <strong>Invoice Date:</strong> ${dateStr}<br/>
                     <strong>Ref:</strong> ${d.invoice_number}<br/>
-                    <strong>Customer PO:</strong> ${d.customer_po_number || '-'}
+                    ${d.customer_po_number ? `<strong>Customer PO:</strong> ${d.customer_po_number}<br/>` : ''}
                 </div>
             </td>
         </tr>
@@ -420,9 +426,9 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                         <tr><td style="border:none;padding:1px 8px 1px 0;">&nbsp;</td><td style="border:none;padding:1px 0;">Court Bazar Sub-Branch</td></tr>
                     </table>
                 </td>
-                <td style="width:45%;border:none;text-align:right;vertical-align:top;">
+                <td style="width:45%;border:none;text-align:center;vertical-align:top;">
                     <div style="border-top:1px solid #1e293b;width:200px;display:inline-block;"></div>
-                    <div style="display:inline-block;text-align:left;padding-top:6px;">
+                    <div style="padding-top:6px;">
                         <div style="font-weight:bold;font-size:12px;">Mohammod</div>
                         <div style="font-size:11px;">Noor Hotel &amp; Restaurant</div>
                         <div style="font-size:11px;">Marketing Manager</div>
@@ -430,7 +436,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 </td>
             </tr>
         </table>
-        <div style="text-align:center;font-size:18px;font-weight:bold;margin-top:10px;">Thank you for your business!</div>
+        <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;margin-top:6px;">M/S Noor Hotel and Restaurant</div>
     </div>
 </body>
 </html>`;
@@ -457,43 +463,50 @@ export default function Invoices({ parties, products, challans }: { parties: Par
             let allHtml = '';
             results.forEach((r) => {
                 const d = r.data;
-                let chlRows = '';
-                if (d.challans && d.challans.length) {
-                    chlRows = d.challans
-                        .map(
-                            (c: InvoiceChallan, i: number) => {
-                                const mealStr = c.items && c.items.length
-                                    ? c.items.map((it: ChallanItem) => `${it.meal_type}/${it.quantity}`).join(', ')
-                                    : '-';
-                                return `<tr><td style="padding:6px 12px;border:1px solid #e2e8f0;">${i + 1}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;font-weight:600;">${c.challan_number}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${c.product_name || c.po_number || '-'}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${mealStr}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;">${fmtDate(c.challan_date)}</td><td style="padding:6px 12px;border:1px solid #e2e8f0;text-align:center;"><span style="padding:2px 8px;border-radius:12px;font-size:11px;background:#dbeafe;color:#1d4ed8;">${c.challan_status}</span></td></tr>`;
-                            },
-                        )
-                        .join('');
-                }
                 let itemRows = '';
                 if (d.items) {
-                    d.items.forEach((it: InvoiceItem, i: number) => {
-                        itemRows += `<tr><td style="padding:8px 12px;border:1px solid #e2e8f0;">${i + 1}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">${it.product_name}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;">${it.meal_type || '-'}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${it.quantity}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">Tk ${fmt$(it.unit_price)}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">${fmt$(it.vat_amount)}</td><td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;">Tk ${fmt$(it.total)}</td></tr>`;
+                    let sl = 0;
+                    const grouped: Record<string, InvoiceItem> = {};
+                    d.items.forEach((it: InvoiceItem) => {
+                        const key = `${it.product_name}_${it.meal_type}_${it.unit_price}`;
+                        if (!grouped[key]) {
+                            grouped[key] = { ...it, quantity: 0, vat_amount: 0, total: 0 };
+                        }
+                        grouped[key].quantity += it.quantity;
+                        grouped[key].vat_amount += it.vat_amount;
+                        grouped[key].total += it.total;
+                    });
+                    Object.values(grouped).forEach((it: InvoiceItem) => {
+                        sl++;
+                        itemRows += `<tr><td style="padding:4px 6px;border:1px solid #000;font-size:11px;width:22px;text-align:center;">${sl}</td><td style="padding:4px 8px;border:1px solid #000;white-space:pre-line;font-size:11px;">${it.description || it.product_name}</td><td style="padding:4px 6px;border:1px solid #000;text-align:center;text-transform:capitalize;font-size:11px;width:42px;">${it.meal_type || '-'}</td><td style="padding:4px 6px;border:1px solid #000;text-align:center;font-size:11px;width:32px;">${it.quantity}</td><td style="padding:4px 6px;border:1px solid #000;text-align:right;font-size:11px;width:60px;">Tk ${fmtPrice(it.unit_price)}</td><td style="padding:4px 6px;border:1px solid #000;text-align:right;font-weight:bold;font-size:11px;width:60px;">Tk ${fmtPrice(it.total)}</td></tr>`;
                     });
                 }
-                allHtml += `<div style="page-break-after:always;padding:20px;border-bottom:2px dashed #e2e8f0;">
-                    <div style="border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:16px;"><h1 style="font-size:22px;margin:0;color:#0f172a;">INVOICE</h1></div>
-                    <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
-                        <tr><td style="width:50%;border:none;padding:4px 0;"><strong>Invoice No:</strong> ${d.invoice_number}</td><td style="width:50%;border:none;padding:4px 0;"><strong>Date:</strong> ${fmtDate(d.date)}</td></tr>
-                        <tr><td style="border:none;padding:4px 0;"><strong>Party:</strong> <span style="word-break:break-word;">${d.party_name || 'N/A'}${d.party_address ? '<br/>' + d.party_address : ''}</span></td><td style="border:none;padding:4px 0;"><strong>Due Date:</strong> ${fmtDate(d.due_date)}</td></tr>
-                        <tr><td colspan="2" style="border:none;padding:4px 0;"><strong>Status:</strong> ${d.status}</td></tr>
+                const dateStr = d.date ? new Date(d.date).toLocaleDateString('en-GB') : '—';
+                const poLine = d.customer_po_number ? '<strong>Customer PO:</strong> ' + d.customer_po_number + '<br/>' : '';
+                allHtml += `<div style="page-break-after:always;padding:6mm 10mm;">
+                    <div style="text-align:center;margin-bottom:20px;"><h1 style="font-size:26px;margin:0;color:#0f172a;text-transform:uppercase;letter-spacing:2px;">INVOICE</h1></div>
+                    <table style="width:100%;border:none;margin-bottom:20px;font-size:13px;">
+                        <tr><td style="width:60%;border:none;padding:4px 0;vertical-align:top;word-break:break-word;"><strong>Invoice to:</strong><br/>${d.party_name || 'N/A'}<br/>${d.party_address || ''}</td>
+                            <td style="width:40%;border:none;padding:4px 0;text-align:right;vertical-align:top;"><div style="display:inline-block;text-align:left;margin-top:4px;"><strong>Invoice Date:</strong> ${dateStr}<br/><strong>Ref:</strong> ${d.invoice_number}<br/>${poLine}</div></td></tr>
                     </table>
-                    ${d.challans && d.challans.length ? `<h3 style="font-size:14px;margin:16px 0 8px;color:#475569;">Challans</h3><table style="width:100%;border-collapse:collapse;margin-bottom:16px;"><thead><tr><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;width:40px;">#</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Challan No</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Product/PO</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Items</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Date</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:center;width:100px;">Status</th></tr></thead><tbody>${chlRows}</tbody></table>` : ''}
-                    <h3 style="font-size:14px;margin:16px 0 8px;color:#475569;">Items</h3>
-                    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;"><thead><tr><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;width:40px;">#</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Product</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;">Meal</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:center;width:80px;">Qty</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">Price</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">VAT</th><th style="background:#f1f5f9;padding:8px 12px;border:1px solid #e2e8f0;text-align:right;width:100px;">Total</th></tr></thead><tbody>${itemRows}</tbody></table>
+                    <table style="width:100%;table-layout:fixed;border-collapse:collapse;margin-bottom:20px;">
+                        <thead><tr><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:22px;">SL</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;">Product / Item</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:42px;">Meal</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:center;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:32px;">Qty</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:right;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:60px;">Rate</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:right;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:60px;">Amount</th></tr></thead>
+                        <tbody>${itemRows}</tbody>
+                    </table>
                     <div style="text-align:right;font-size:14px;margin-top:12px;">
-                        <div>Subtotal: <strong>Tk ${fmt$(d.subtotal)}</strong></div>
-                        <div>VAT: <strong>Tk ${fmt$(d.total_vat)}</strong></div>
-                        <div style="font-size:16px;border-top:2px solid #e2e8f0;padding-top:6px;margin-top:6px;">Total: <strong>Tk ${fmt$(d.total_amount)}</strong></div>
-                        <div style="color:#16a34a;">Paid: <strong>Tk ${fmt$(d.amount_paid)}</strong></div>
-                        <div style="color:#dc2626;">Due: <strong>Tk ${fmt$(d.amount_due)}</strong></div>
+                        <table style="border:none;font-size:14px;margin-left:auto;">
+                            <tr><td style="border:none;padding:4px 10px 4px 0;text-align:right;">Subtotal:</td><td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk ${fmtPrice(d.subtotal || 0)}</strong></td></tr>
+                            <tr><td style="border:none;padding:4px 10px 4px 0;text-align:right;">VAT:</td><td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk ${fmtPrice(d.total_vat || 0)}</strong></td></tr>
+                            <tr><td style="border:none;padding:4px 10px 4px 0;text-align:right;border-top:2px solid #e2e8f0;">Grand Total:</td><td style="border:none;padding:4px 0;text-align:right;border-top:2px solid #e2e8f0;white-space:nowrap;font-size:16px;"><strong>Tk ${fmtPrice(d.total_amount)}</strong></td></tr>
+                        </table>
                     </div>
-                    ${d.notes ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin-top:16px;font-size:12px;color:#64748b;"><strong>Notes:</strong> ${d.notes}</div>` : ''}
+                    <div style="position:fixed;bottom:10mm;left:10mm;right:10mm;">
+                        <table style="width:100%;border:none;font-size:12px;">
+                            <tr><td style="width:55%;border:none;vertical-align:top;"><strong style="font-size:13px;">Payment Method</strong><br/><table style="border:none;font-size:12px;margin-top:4px;"><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Bank Name:</strong></td><td style="border:none;padding:1px 0;">BRAC BANK</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>A/C Name:</strong></td><td style="border:none;padding:1px 0;">NOOR HOTEL AND RESTAURANT</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Account Number:</strong></td><td style="border:none;padding:1px 0;">2078277570001</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Swift Code:</strong></td><td style="border:none;padding:1px 0;">BRAKBDDH</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Routing No:</strong></td><td style="border:none;padding:1px 0;">060220259</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;">&nbsp;</td><td style="border:none;padding:1px 0;">Court Bazar Sub-Branch</td></tr></table></td>
+                                <td style="width:45%;border:none;text-align:center;vertical-align:top;"><div style="border-top:1px solid #1e293b;width:200px;display:inline-block;"></div><div style="padding-top:6px;"><div style="font-weight:bold;font-size:12px;">Mohammod</div><div style="font-size:11px;">Noor Hotel & Restaurant</div><div style="font-size:11px;">Marketing Manager</div></div></td></tr>
+                        </table>
+                        <div style="text-align:center;font-size:18px;font-weight:bold;margin-top:10px;">M/S Noor Hotel and Restaurant</div>
+                    </div>
                 </div>`;
             });
             const printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Invoice Batch Print</title><style>@page{size:A4;margin:15mm;}body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:0;font-size:13px;}</style></head><body>${allHtml}</body></html>`;
@@ -509,7 +522,28 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         }
     };
 
-    const totalPages = Math.ceil(total / 10);
+    const totalPages = Math.ceil(total / limit);
+    const from = total === 0 ? 0 : (page - 1) * limit + 1;
+    const to = Math.min(page * limit, total);
+
+    const exportToExcel = () => {
+        const data = invoices.map((inv) => ({
+            'Invoice No': inv.invoice_number,
+            Party: inv.party_name || '',
+            'Customer PO': inv.customer_po_number || '',
+            Date: fmtDate(inv.date),
+            'Due Date': fmtDate(inv.due_date),
+            Amount: inv.total_amount || 0,
+            Paid: inv.amount_paid || 0,
+            Due: inv.amount_due || 0,
+            Status: inv.status,
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
+        XLSX.writeFile(wb, 'invoices.xlsx');
+    };
 
     return (
         <>
@@ -529,6 +563,10 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                 Print Selected ({selectedIds.length})
                             </Button>
                         )}
+                        <Button variant="outline" onClick={exportToExcel}>
+                            <FileDown className="mr-1.5 size-4" />
+                            Export Excel
+                        </Button>
                         <Button onClick={() => setCreateOpen(true)}>
                             <Plus className="mr-1.5 size-4" />
                             New Invoice
@@ -558,12 +596,37 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                         <Label className="text-[10px] font-semibold uppercase text-muted-foreground">To</Label>
                         <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-8 w-36 text-xs" />
                     </div>
-                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setPartyFilter(''); setDateFrom(''); setDateTo(''); setPage(1); }}>
+                    <div className="grid gap-1.5">
+                        <Label className="text-[10px] font-semibold uppercase text-muted-foreground">Search</Label>
+                        <Input
+                            placeholder="Invoice no, PO, party..."
+                            value={search}
+                            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                            className="h-8 w-48 text-xs"
+                        />
+                    </div>
+                    <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setPartyFilter(''); setDateFrom(''); setDateTo(''); setSearch(''); setPage(1); }}>
                         Clear
                     </Button>
                     <span className="ml-auto text-xs font-medium text-muted-foreground">
                         {total} invoice{total === 1 ? '' : 's'} total
                     </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    {statusFilters.map((s) => (
+                        <button
+                            key={s.v}
+                            onClick={() => { setFilter(s.v); setPage(1); }}
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                filter === s.v
+                                    ? 'bg-foreground text-background'
+                                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                            }`}
+                        >
+                            {s.l}
+                        </button>
+                    ))}
                 </div>
 
                 <div className="relative flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 shadow-sm dark:border-sidebar-border">
@@ -576,6 +639,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                     </th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Number</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Party</th>
+                                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">PO</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due</th>
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Amount</th>
@@ -588,7 +652,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                             <tbody>
                                 {invoices.length === 0 ? (
                                     <tr>
-                                        <td colSpan={10} className="px-4 py-16 text-center">
+                                        <td colSpan={11} className="px-4 py-16 text-center">
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                                 <FileText className="size-8 opacity-40" />
                                                 <p className="text-sm font-medium">No invoices found</p>
@@ -604,6 +668,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                             </td>
                                             <td className="px-4 py-3 font-mono text-xs font-semibold">{inv.invoice_number}</td>
                                             <td className="px-4 py-3 text-xs font-medium">{inv.party_name || '—'}</td>
+                                            <td className="px-4 py-3 text-xs text-muted-foreground">{inv.customer_po_number || '—'}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(inv.date)}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(inv.due_date)}</td>
                                             <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">Tk {fmt$(inv.total_amount)}</td>
@@ -648,19 +713,34 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                     </div>
                 </div>
 
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
-                        <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+                <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground">
+                            {from}–{to} of {total}
+                        </span>
+                        <select
+                            value={limit}
+                            onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                            className="flex h-7 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                        >
+                            {[10, 20, 50, 100].map((v) => (
+                                <option key={v} value={v}>{v}</option>
+                            ))}
+                        </select>
+                        <span className="text-xs text-muted-foreground">per page</span>
+                    </div>
+                    {totalPages > 1 && (
                         <div className="flex items-center gap-2">
                             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                                 <ChevronLeft className="mr-1 size-3.5" /> Previous
                             </Button>
+                            <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
                             <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
                                 Next <ChevronRight className="ml-1 size-3.5" />
                             </Button>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Create Dialog */}
@@ -803,6 +883,10 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                 <div>
                                     <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Due Date</span>
                                     <span>{fmtDate(viewing.due_date)}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Customer PO</span>
+                                    <span className="font-medium">{viewing.customer_po_number || '—'}</span>
                                 </div>
                             </div>
 

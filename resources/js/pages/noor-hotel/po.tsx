@@ -27,6 +27,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import {
     Pencil,
     Plus,
@@ -42,6 +43,7 @@ import {
     ClipboardList,
     Printer,
     Mail,
+    FileDown,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -138,6 +140,9 @@ function MealFormFieldsInner({
                                         <SelectItem value="lunch">Lunch</SelectItem>
                                         <SelectItem value="dinner">Dinner</SelectItem>
                                         <SelectItem value="snack">Snack</SelectItem>
+                                        <SelectItem value="morning_snacks">Morning Snacks</SelectItem>
+                                        <SelectItem value="evening_snacks">Evening Snacks</SelectItem>
+                                        <SelectItem value="hot_meal">Hot Meal</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -147,6 +152,7 @@ function MealFormFieldsInner({
                                 placeholder="Qty"
                                 value={m.quantity || ''}
                                 onChange={(e) => updateMeal(idx, 'quantity', parseInt(e.target.value) || 0)}
+                                onWheel={(e) => (e.target as HTMLInputElement).blur()}
                             />
                             <Input
                                 type="number"
@@ -155,9 +161,10 @@ function MealFormFieldsInner({
                                 step="0.01"
                                 value={m.unit_price || ''}
                                 onChange={(e) => updateMeal(idx, 'unit_price', parseFloat(e.target.value) || 0)}
+                                onWheel={(e) => (e.target as HTMLInputElement).blur()}
                             />
                             <span className="w-20 shrink-0 text-right text-xs font-semibold tabular-nums">
-                                ${(m.quantity * m.unit_price).toFixed(2)}
+                                Tk {(m.quantity * m.unit_price).toFixed(2)}
                             </span>
                             <Button
                                 type="button"
@@ -182,15 +189,15 @@ function MealFormFieldsInner({
             <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Subtotal</span>
-                    <span className="tabular-nums">${subtotal.toFixed(2)}</span>
+                    <span className="tabular-nums">Tk {subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-muted-foreground">
                     <span>VAT ({vatRate || 0}%)</span>
-                    <span className="tabular-nums">${vat.toFixed(2)}</span>
+                    <span className="tabular-nums">Tk {vat.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t border-border pt-1.5 text-sm font-bold">
                     <span>Total</span>
-                    <span className="tabular-nums">${total.toFixed(2)}</span>
+                    <span className="tabular-nums">Tk {total.toFixed(2)}</span>
                 </div>
             </div>
         </div>
@@ -211,6 +218,11 @@ function ProductForm({
     setVatRate,
     partyId,
     setPartyId,
+    partySearch,
+    setPartySearch,
+    partyDropdownOpen,
+    setPartyDropdownOpen,
+    filteredParties,
     customerPoNumber,
     setCustomerPoNumber,
     description,
@@ -233,6 +245,11 @@ function ProductForm({
     setVatRate: (v: string) => void;
     partyId: string;
     setPartyId: (v: string) => void;
+    partySearch: string;
+    setPartySearch: (v: string) => void;
+    partyDropdownOpen: boolean;
+    setPartyDropdownOpen: (v: boolean) => void;
+    filteredParties: Party[];
     customerPoNumber: string;
     setCustomerPoNumber: (v: string) => void;
     description: string;
@@ -285,30 +302,57 @@ function ProductForm({
                     </div>
                     <div className="grid gap-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Party *</Label>
-                        <Select value={partyId} onValueChange={setPartyId}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select party" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {parties.map((p) => (
-                                    <SelectItem key={p.id} value={String(p.id)}>
-                                        {p.party_name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="relative">
+                            <Input
+                                placeholder="Search party..."
+                                value={partySearch}
+                                onChange={(e) => { setPartySearch(e.target.value); setPartyDropdownOpen(true); }}
+                                onFocus={() => setPartyDropdownOpen(true)}
+                            />
+                            {partyDropdownOpen && (
+                                <>
+                                    <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                                        {filteredParties.length === 0 ? (
+                                            <div className="px-2 py-4 text-center text-xs text-muted-foreground">No parties found</div>
+                                        ) : (
+                                            filteredParties.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    className={`w-full rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent ${partyId === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    onClick={() => { setPartyId(String(p.id)); setPartySearch(p.party_name); setPartyDropdownOpen(false); }}
+                                                >
+                                                    {p.party_name}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                    <div className="fixed inset-0 z-40" onClick={() => setPartyDropdownOpen(false)} />
+                                </>
+                            )}
+                        </div>
+                        <input type="hidden" name="party_id" value={partyId} />
                         <InputError message={errors.party_id} />
                     </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                     <div className="grid gap-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Unit *</Label>
-                        <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="kg, pcs" required />
+                        <Select value={unit} onValueChange={setUnit}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {['pcs', 'kg', 'g', 'liter', 'ml', 'box', 'pack', 'dozen', 'pair', 'set', 'roll', 'meter'].map((u) => (
+                                    <SelectItem key={u} value={u}>{u}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         <InputError message={errors.unit} />
                     </div>
                     <div className="grid gap-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">VAT Rate %</Label>
-                        <Input type="number" step="0.01" value={vatRate} onChange={(e) => setVatRate(e.target.value)} />
+                        <Input type="number" step="0.01" value={vatRate} onChange={(e) => setVatRate(e.target.value)} onWheel={(e) => (e.target as HTMLInputElement).blur()} />
                     </div>
                     <div className="grid gap-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Customer PO No.</Label>
@@ -347,6 +391,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
     const [products, setProducts] = useState<Product[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(10);
     const [filter, setFilter] = useState('all');
     const [partyFilter, setPartyFilter] = useState('');
 
@@ -361,20 +406,26 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
     const [errors, setErrors] = useState<Record<string, string>>({});
 
     const [name, setName] = useState('');
-    const [unit, setUnit] = useState('');
-    const [vatRate, setVatRate] = useState('10');
+    const [unit, setUnit] = useState('pcs');
+    const [vatRate, setVatRate] = useState('');
     const [partyId, setPartyId] = useState('');
+    const [partySearch, setPartySearch] = useState('');
+    const [partyDropdownOpen, setPartyDropdownOpen] = useState(false);
     const [customerPoNumber, setCustomerPoNumber] = useState('');
     const [description, setDescription] = useState('');
     const [meals, setMeals] = useState<MealRow[]>([
         { meal_type: 'lunch', quantity: 0, unit_price: 0, description: '' },
     ]);
 
+    const filteredParties = parties.filter((p) =>
+        p.party_name.toLowerCase().includes(partySearch.toLowerCase())
+    );
+
     const fetchProducts = useCallback(async () => {
         try {
             const params = new URLSearchParams();
             params.set('page', String(page));
-            params.set('limit', '10');
+            params.set('limit', String(limit));
             if (filter !== 'all') params.set('status', filter);
             if (partyFilter) params.set('party_id', partyFilter);
             const res = await fetch(`/api/products?${params.toString()}`, {
@@ -386,7 +437,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         } catch {
             toast.error('Failed to load purchase orders');
         }
-    }, [page, filter, partyFilter]);
+    }, [page, limit, filter, partyFilter]);
 
     useEffect(() => {
         fetchProducts();
@@ -394,9 +445,10 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
 
     const resetForm = () => {
         setName('');
-        setUnit('');
-        setVatRate('15');
+        setUnit('pcs');
+        setVatRate('');
         setPartyId('');
+        setPartySearch('');
         setCustomerPoNumber('');
         setDescription('');
         setMeals([{ meal_type: 'lunch', quantity: 0, unit_price: 0, description: '' }]);
@@ -419,6 +471,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             setUnit(p.unit);
             setVatRate(String(p.vat_rate));
             setPartyId(p.party_id ? String(p.party_id) : '');
+            setPartySearch(p.party?.party_name || '');
             setCustomerPoNumber(p.customer_po_number || '');
             setDescription(p.description || '');
             setMeals(
@@ -710,13 +763,40 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         unit, setUnit,
         vatRate, setVatRate,
         partyId, setPartyId,
+        partySearch, setPartySearch,
+        partyDropdownOpen, setPartyDropdownOpen,
+        filteredParties,
         customerPoNumber, setCustomerPoNumber,
         description, setDescription,
         meals, setMeals,
         parties,
     };
 
-    const totalPages = Math.ceil(total / 10);
+    const totalPages = Math.ceil(total / limit);
+    const from = total === 0 ? 0 : (page - 1) * limit + 1;
+    const to = Math.min(page * limit, total);
+
+    const exportToExcel = () => {
+        const data = products.map((p) => {
+            const meals = p.meals || [];
+            return {
+                Code: p.code,
+                Name: p.name,
+                Party: p.party_name || '',
+                'Customer PO': p.customer_po_number || '',
+                Unit: p.unit,
+                'VAT Rate': `${p.vat_rate}%`,
+                Ordered: meals.reduce((s, m) => s + m.quantity, 0),
+                Delivered: meals.reduce((s, m) => s + (m.delivered_quantity || 0), 0),
+                Status: getDeliveryStatus(p).label,
+            };
+        });
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'PurchaseOrders');
+        XLSX.writeFile(wb, 'purchase_orders.xlsx');
+    };
 
     return (
         <>
@@ -729,10 +809,16 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                         </div>
                         <Heading variant="small" title="Purchase Orders" description="Manage supplier orders and delivery status" />
                     </div>
-                    <Button onClick={openCreate}>
-                        <Plus className="mr-1.5 size-4" />
-                        New Purchase Order
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={exportToExcel}>
+                            <FileDown className="mr-1.5 size-4" />
+                            Export Excel
+                        </Button>
+                        <Button onClick={openCreate}>
+                            <Plus className="mr-1.5 size-4" />
+                            New Purchase Order
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -875,9 +961,24 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                     </div>
                 </div>
 
-                {totalPages > 1 && (
+                {total > 0 && (
                     <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
-                        <span className="text-xs text-muted-foreground">Page {page} of {totalPages}</span>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>Showing {from}–{to} of {total}</span>
+                            <div className="flex items-center gap-1">
+                                <span>per page:</span>
+                                <select
+                                    value={limit}
+                                    onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                                    className="flex h-8 w-20 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                        </div>
                         <div className="flex items-center gap-2">
                             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                                 <ChevronLeft className="mr-1 size-3.5" /> Previous
@@ -986,8 +1087,8 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                     <tr key={i} className="border-t border-border first:border-t-0">
                                                         <td className="px-3 py-2 text-xs capitalize">{m.meal_type}</td>
                                                         <td className="px-3 py-2 text-right text-xs tabular-nums">{m.quantity}</td>
-                                                        <td className="px-3 py-2 text-right text-xs tabular-nums">${m.unit_price}</td>
-                                                        <td className="px-3 py-2 text-right text-xs font-semibold tabular-nums">${line.toFixed(2)}</td>
+                                                        <td className="px-3 py-2 text-right text-xs tabular-nums">Tk {m.unit_price}</td>
+                                                        <td className="px-3 py-2 text-right text-xs font-semibold tabular-nums">Tk {line.toFixed(2)}</td>
                                                         <td className="px-3 py-2 text-right text-xs font-medium tabular-nums text-emerald-600">{m.delivered_quantity || 0}</td>
                                                         <td className={`px-3 py-2 text-right text-xs tabular-nums ${remaining > 0 ? 'font-medium text-red-600' : 'text-muted-foreground'}`}>{remaining}</td>
                                                         <td className="max-w-[180px] break-words px-3 py-2 text-xs text-muted-foreground">{m.description || '—'}</td>
@@ -1000,7 +1101,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                         <span className="text-xs text-muted-foreground">
                                             {viewingProduct.meals.length} item{viewingProduct.meals.length === 1 ? '' : 's'} · {viewingProduct.meals.reduce((s, m) => s + m.quantity, 0)} ordered · {viewingProduct.meals.reduce((s, m) => s + (m.delivered_quantity || 0), 0)} delivered
                                         </span>
-                                        <span className="text-sm font-bold tabular-nums">Subtotal: ${(viewingProduct.meals_subtotal || 0).toFixed(2)}</span>
+                                        <span className="text-sm font-bold tabular-nums">Subtotal: Tk {(viewingProduct.meals_subtotal || 0).toFixed(2)}</span>
                                     </div>
                                 </div>
                             )}

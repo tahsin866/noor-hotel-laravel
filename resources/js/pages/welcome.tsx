@@ -1,6 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
 import { dashboard, login } from '@/routes';
-import { register } from '@/routes';
 
 export default function Welcome() {
     const { auth } = usePage().props;
@@ -42,12 +41,6 @@ export default function Welcome() {
                                         className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
                                     >
                                         Log in
-                                    </Link>
-                                    <Link
-                                        href={register()}
-                                        className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 transition-colors"
-                                    >
-                                        Get Started
                                     </Link>
                                 </>
                             )}
