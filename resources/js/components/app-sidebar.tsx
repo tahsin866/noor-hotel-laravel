@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid, Users, ShoppingCart, FileText, CreditCard, BarChart3, Truck } from 'lucide-react';
+import { LayoutGrid, Users, ShoppingCart, FileText, CreditCard, BarChart3, Truck, Shield, Lock, UserCog, ShieldCheck } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -14,38 +14,69 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { edit as editSecurity } from '@/routes/security';
 import type { NavItem } from '@/types';
+import { usePage } from '@inertiajs/react';
 
 const mainNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
+        permission: 'view_dashboard',
     },
     {
         title: 'Party',
         href: '/party',
         icon: Users,
+        permission: 'manage_parties',
     },
     {
         title: 'Purchase Order',
         href: '/po',
         icon: ShoppingCart,
+        permission: 'manage_products',
     },
     {
         title: 'Chalans',
         href: '/chalans',
         icon: Truck,
+        permissions: ['manage_challans', 'print_challans'],
     },
     {
         title: 'Invoices',
         href: '/invoices',
         icon: FileText,
+        permission: 'manage_invoices',
     },
     {
         title: 'Payments',
         href: '/payments',
         icon: BarChart3,
+        permission: 'manage_payments',
+    },
+    {
+        title: 'Security',
+        href: editSecurity(),
+        icon: ShieldCheck,
+    },
+];
+
+const adminNavItems: NavItem[] = [
+    {
+        title: 'Users',
+        href: '/admin/users',
+        icon: UserCog,
+    },
+    {
+        title: 'Roles',
+        href: '/admin/roles',
+        icon: Shield,
+    },
+    {
+        title: 'Permissions',
+        href: '/admin/permissions',
+        icon: Lock,
     },
 ];
 
@@ -63,6 +94,15 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const userPermissions = usePage().props.permissions ?? [];
+    const isAdmin = userPermissions.includes('manage_users') || userPermissions.includes('manage_roles');
+
+    const visibleMainItems = mainNavItems.filter((item) => {
+        if (!item.permission && !item.permissions) return true;
+        const required = item.permissions ?? (item.permission ? [item.permission] : []);
+        return required.some((perm) => userPermissions.includes(perm));
+    });
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -79,6 +119,7 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <NavMain items={mainNavItems} />
+                {isAdmin && <NavMain items={adminNavItems} />}
             </SidebarContent>
 
             <SidebarFooter>

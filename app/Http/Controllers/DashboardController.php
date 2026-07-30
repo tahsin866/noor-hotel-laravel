@@ -31,7 +31,7 @@ class DashboardController extends Controller
             ->pluck('total', 'status');
 
         $monthlyChallans = Challan::select(
-            DB::raw("to_char(date, 'YYYY-MM') as month"),
+            DB::raw((DB::getDriverName() === 'sqlite' ? "strftime('%Y-%m', date)" : "to_char(date, 'YYYY-MM')").' as month'),
             DB::raw('count(*) as total')
         )
             ->groupBy('month')
@@ -40,7 +40,7 @@ class DashboardController extends Controller
             ->pluck('total', 'month');
 
         $monthlyInvoices = Invoice::select(
-            DB::raw("to_char(date, 'YYYY-MM') as month"),
+            DB::raw((DB::getDriverName() === 'sqlite' ? "strftime('%Y-%m', date)" : "to_char(date, 'YYYY-MM')").' as month'),
             DB::raw('count(*) as total')
         )
             ->groupBy('month')
@@ -49,7 +49,7 @@ class DashboardController extends Controller
             ->pluck('total', 'month');
 
         $monthlyRevenue = Invoice::select(
-            DB::raw("to_char(date, 'YYYY-MM') as month"),
+            DB::raw((DB::getDriverName() === 'sqlite' ? "strftime('%Y-%m', date)" : "to_char(date, 'YYYY-MM')").' as month'),
             DB::raw('sum(total_amount) as total')
         )
             ->groupBy('month')

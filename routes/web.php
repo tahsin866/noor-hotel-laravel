@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\party\PartyController;
+use App\Http\Controllers\PermissionController;
+use App\Http\Controllers\RoleController;
+use App\Http\Controllers\UserController;
 use App\Models\Challan;
 use App\Models\Party;
 use App\Models\Product;
@@ -13,10 +16,12 @@ Route::inertia('/', 'welcome')->name('home');
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
-    Route::get('party', [PartyController::class, 'index'])->name('party');
-    Route::post('party', [PartyController::class, 'store']);
+    Route::middleware(['auth', 'verified', 'permission:manage_parties'])->prefix('party')->name('party.')->group(function () {
+        Route::get('/', [PartyController::class, 'index'])->name('index');
+        Route::post('/', [PartyController::class, 'store']);
+    });
 
-    Route::get('po', function () {
+    Route::middleware(['permission:manage_products'])->get('po', function () {
         $parties = Party::select('id', 'party_name')->get();
 
         return Inertia::render('noor-hotel/po', [
@@ -24,7 +29,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('po');
 
-    Route::get('chalans', function () {
+    Route::middleware(['permission:manage_challans,print_challans'])->get('chalans', function () {
         $products = Product::with(['party', 'meals'])
             ->select('id', 'name', 'code', 'unit', 'party_id')
             ->withSum('meals as total_ordered', 'quantity')
@@ -38,7 +43,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('chalans');
 
-    Route::get('invoices', function () {
+    Route::middleware(['permission:manage_invoices'])->get('invoices', function () {
         $parties = Party::select('id', 'party_name')->get();
         $products = Product::with(['party'])
             ->select('id', 'name', 'code', 'unit', 'party_id', 'customer_po_number')
@@ -81,13 +86,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('invoices');
 
-    Route::get('payments', function () {
+    Route::middleware(['permission:manage_payments'])->get('payments', function () {
         $parties = Party::select('id', 'party_name')->get();
 
         return Inertia::render('noor-hotel/payment', [
             'parties' => $parties,
         ]);
     })->name('payments');
+
+    Route::middleware(['role:super_admin,admin'])->prefix('admin')->name('admin.')->group(function () {
+        Route::get('users', [UserController::class, 'index'])->name('users.index');
+        Route::post('users', [UserController::class, 'store'])->name('users.store');
+        Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
+        Route::delete('users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
+        Route::get('roles', [RoleController::class, 'index'])->name('roles.index');
+        Route::post('roles', [RoleController::class, 'store'])->name('roles.store');
+        Route::put('roles/{role}', [RoleController::class, 'update'])->name('roles.update');
+        Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy');
+
+        Route::get('permissions', [PermissionController::class, 'index'])->name('permissions.index');
+        Route::post('permissions', [PermissionController::class, 'store'])->name('permissions.store');
+        Route::delete('permissions/{permission}', [PermissionController::class, 'destroy'])->name('permissions.destroy');
+    });
 });
 
 require __DIR__.'/settings.php';

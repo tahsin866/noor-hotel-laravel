@@ -643,12 +643,12 @@ export default function Challans({ products, parties }: { products: Product[]; p
                             const rows = (c.items || [])
                 .map(
                     (it: ChlItem, i: number) =>
-                        `<tr>
-                            <td style="padding:8px 12px;border:1px solid #000;text-align:center;">${i + 1}</td>
-                            <td style="padding:8px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
-                            <td style="padding:8px 12px;border:1px solid #000;text-align:left;">${it.meal_type.charAt(0).toUpperCase() + it.meal_type.slice(1)}</td>
-                            <td style="padding:8px 12px;border:1px solid #000;text-align:center;">${it.quantity}</td>
-                        </tr>`,
+                            `<tr>
+                                <td style="width:20px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
+                                <td style="padding:6px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
+                                <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;">${it.meal_type.charAt(0).toUpperCase() + it.meal_type.slice(1)}</td>
+                                <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
+                            </tr>`,
                 )
                 .join('');
 
@@ -673,25 +673,25 @@ export default function Challans({ products, parties }: { products: Product[]; p
         <h1>DELIVERY CHALLAN</h1>
         <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
             <tr>
-                <td style="width:50%;border:none;padding:4px 0;"><strong>Challan No:</strong> ${c.challan_number}</td>
-                <td style="width:50%;border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
-            </tr>
-            <tr>
-                <td style="border:none;padding:4px 0;"><strong>PO:</strong> ${c.po_number || '—'}</td>
-                <td style="border:none;padding:4px 0;text-align:right;"><strong>Product:</strong> ${c.product_name || '—'}</td>
-            </tr>
-            <tr>
                 <td style="border:none;padding:4px 0;"><strong>Party:</strong> ${c.party_name || '—'}</td>
+                <td style="border:none;padding:4px 0;text-align:right;"><strong>Challan No:</strong> ${c.challan_number}</td>
             </tr>
-            ${c.address ? `<tr><td colspan="2" style="border:none;padding:4px 0;width:100%;"><strong>Address:</strong> ${c.address}</td></tr>` : ''}
+            <tr>
+                <td style="border:none;padding:4px 0;max-width:50%;overflow-wrap:break-word;word-wrap:break-word;"><strong>Address:</strong> ${c.address || '—'}</td>
+                <td style="border:none;padding:4px 0;text-align:right;"><strong>PO:</strong> ${c.po_number || '—'}</td>
+            </tr>
+            <tr>
+                <td style="border:none;padding:4px 0;"></td>
+                <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
+            </tr>
         </table>
         <table class="items">
             <thead>
                 <tr>
-                    <th style="width:40px;">SL</th>
+                    <th style="width:20px;">SL</th>
                     <th>Product / Item</th>
-                    <th style="width:80px;text-align:left;">Meal</th>
-                    <th style="width:80px;text-align:center;">Qty</th>
+                    <th style="width:50px;text-align:left;">Meal</th>
+                    <th style="width:50px;text-align:center;">Qty</th>
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -714,7 +714,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                 </tr>
             </table>
         </div>
-        <div class="footer">Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; Noor Hotel PRG</div>
+                <div class="footer">Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; M/S Noor Hotel and restaurant</div>
     </div>
 </body>
 </html>`;

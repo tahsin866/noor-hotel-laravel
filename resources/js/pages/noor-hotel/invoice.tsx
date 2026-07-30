@@ -324,12 +324,12 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 Object.values(grouped).forEach((it: InvoiceItem) => {
                     sl++;
                     itemRows += `<tr>
-                        <td style="padding:8px 12px;border:1px solid #000;font-size:12px;">${sl}</td>
-                        <td style="padding:8px 12px;border:1px solid #000;white-space:pre-line;font-size:12px;">${it.description || it.product_name}</td>
-                        <td style="padding:8px 12px;border:1px solid #000;text-align:left;text-transform:capitalize;">${it.meal_type || '-'}</td>
-                        <td style="padding:8px 12px;border:1px solid #000;text-align:center;">${it.quantity}</td>
-                        <td style="padding:8px 12px;border:1px solid #000;text-align:right;">Tk ${fmtPrice(it.unit_price)}</td>
-                        <td style="padding:8px 12px;border:1px solid #000;text-align:right;font-weight:bold;">Tk ${fmtPrice(it.total)}</td>
+                        <td style="padding:4px 6px;border:1px solid #000;font-size:11px;width:22px;text-align:center;">${sl}</td>
+                        <td style="padding:4px 8px;border:1px solid #000;white-space:pre-line;font-size:11px;width:auto;">${it.description || it.product_name}</td>
+                        <td style="padding:4px 6px;border:1px solid #000;text-align:center;text-transform:capitalize;font-size:11px;width:42px;">${it.meal_type || '-'}</td>
+                        <td style="padding:4px 6px;border:1px solid #000;text-align:center;font-size:11px;width:32px;">${it.quantity}</td>
+                        <td style="padding:4px 6px;border:1px solid #000;text-align:right;font-size:11px;width:60px;">Tk ${fmtPrice(it.unit_price)}</td>
+                        <td style="padding:4px 6px;border:1px solid #000;text-align:right;font-weight:bold;font-size:11px;width:60px;">Tk ${fmtPrice(it.total)}</td>
                     </tr>`;
                 });
             }
@@ -347,9 +347,9 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         .header h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; }
         table.info { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
         table.info td { border: none; padding: 4px 0; vertical-align: top; }
-        table.items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
-        table.items td { padding: 8px 12px; border: 1px solid #000; }
+        table.items { width: 100%; table-layout: fixed; border-collapse: collapse; margin-bottom: 20px; }
+        table.items th { padding: 6px 8px; border: 1px solid #000; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.items td { padding: 6px 8px; border: 1px solid #000; }
         .totals { text-align: right; font-size: 14px; margin-top: 12px; }
         .totals div { margin-bottom: 4px; }
         .totals .grand { font-size: 16px; border-top: 2px solid #e2e8f0; padding-top: 6px; margin-top: 6px; }
@@ -380,12 +380,12 @@ export default function Invoices({ parties, products, challans }: { parties: Par
     <table class="items">
         <thead>
             <tr>
-                <th style="width:40px;">SL</th>
-                <th>Product / Item</th>
-                <th style="width:80px;text-align:left;">Meal</th>
-                <th style="width:70px;text-align:center;">Qty</th>
-                <th style="width:100px;text-align:right;">Unit Price</th>
-                <th style="width:100px;text-align:right;">Amount</th>
+                <th style="width:22px;text-align:center;">SL</th>
+                <th style="width:auto;">Product / Item</th>
+                <th style="width:42px;text-align:center;">Meal</th>
+                <th style="width:32px;text-align:center;">Qty</th>
+                <th style="width:60px;text-align:right;">Rate</th>
+                <th style="width:60px;text-align:right;">Amount</th>
             </tr>
         </thead>
         <tbody>${itemRows}</tbody>
