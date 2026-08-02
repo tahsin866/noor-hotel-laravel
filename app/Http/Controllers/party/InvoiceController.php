@@ -54,6 +54,9 @@ class InvoiceController extends Controller
         $items = $query->skip(($page - 1) * $limit)->take($limit)->get();
 
         $items = $items->map(function ($item) {
+            $vatReduce = round((float) $item->paymentHistory->sum('reduce_amount'), 2);
+            $dueAmount = max(0, round((float) $item->total_amount - (float) $item->amount_paid - $vatReduce, 2));
+
             return [
                 'id' => $item->id,
                 'invoice_number' => $item->invoice_number,
@@ -65,6 +68,8 @@ class InvoiceController extends Controller
                 'total_amount' => $item->total_amount,
                 'amount_paid' => $item->amount_paid,
                 'amount_due' => $item->amount_due,
+                'vat_reduce' => $vatReduce,
+                'due_amount' => $dueAmount,
                 'attachments' => $item->paymentHistory
                     ->filter(fn ($p) => ! empty($p->attachment))
                     ->map(fn ($p) => Storage::disk('public')->url($p->attachment))

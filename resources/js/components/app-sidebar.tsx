@@ -56,6 +56,17 @@ const mainNavItems: NavItem[] = [
         permission: 'manage_payments',
     },
     {
+        title: 'Report',
+        href: '/report',
+        icon: BarChart3,
+        children: [
+            { title: 'Purchase Report', href: '/report/purchase', icon: ShoppingCart },
+            { title: 'Challan Report', href: '/report/challan', icon: Truck },
+            { title: 'Invoice Report', href: '/report/invoice', icon: FileText },
+            { title: 'Payments Report', href: '/report/payment', icon: CreditCard },
+        ],
+    },
+    {
         title: 'Security',
         href: editSecurity(),
         icon: ShieldCheck,

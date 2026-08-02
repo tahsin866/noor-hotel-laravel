@@ -37,6 +37,8 @@ type Invoice = {
     total_amount: number;
     amount_paid: number;
     amount_due: number;
+    vat_reduce?: number;
+    due_amount?: number;
     attachments?: string[];
     status: string;
 };
@@ -129,7 +131,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
 
     const openPayDialog = (inv: Invoice) => {
         setPaying(inv);
-        setPayAmount(String(inv.amount_due));
+        setPayAmount(String(inv.due_amount ?? inv.amount_due));
         setPayMethod('');
         setPayRef('');
         setPayDate(new Date().toISOString().slice(0, 10));
@@ -152,13 +154,14 @@ export default function Payments({ parties }: { parties: Party[] }) {
             toast.error('Enter a valid amount');
             return;
         }
-        if (amount > paying.amount_due) {
+        const due = paying.due_amount ?? paying.amount_due;
+        if (amount > due) {
             toast.error('Amount exceeds due balance');
             return;
         }
         setProcessing(paying.id);
         try {
-            const isFull = amount >= paying.amount_due;
+            const isFull = amount >= due;
             const formData = new FormData();
             formData.append('status', payStatus || (isFull ? 'paid' : 'partial'));
             formData.append('amount_paid', String(amount));
@@ -207,7 +210,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
             <tbody>
                 <tr><td style="padding:8px 12px;border:1px solid #000;">Total Amount</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;">${fmt$(inv.total_amount)}</td></tr>
                 <tr><td style="padding:8px 12px;border:1px solid #000;">Amount Paid</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#16a34a;">${fmt$(inv.amount_paid)}</td></tr>
-                <tr><td style="padding:8px 12px;border:1px solid #000;">VAT Reduce (${reducePct(inv.amount_due, inv.total_amount)}%)</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#dc2626;">${fmt$(inv.amount_due)}</td></tr>
+                <tr><td style="padding:8px 12px;border:1px solid #000;">Amount Due</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#dc2626;">${fmt$(inv.due_amount ?? 0)}</td></tr>
+                <tr><td style="padding:8px 12px;border:1px solid #000;">VAT Reduce (${reducePct(inv.vat_reduce ?? 0, inv.total_amount)}%)</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#dc2626;">${fmt$(inv.vat_reduce ?? 0)}</td></tr>
                 <tr style="background:#f8fafc;"><td style="padding:8px 12px;border:1px solid #000;font-weight:bold;">Status</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;text-transform:capitalize;">${inv.status}</td></tr>
             </tbody>
         </table>
@@ -229,7 +233,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
             `Date: ${fmtDate(inv.date)}`,
             `Amount: Tk ${fmt$(inv.total_amount)}`,
             `Paid: Tk ${fmt$(inv.amount_paid)}`,
-            `VAT Reduce: Tk ${fmt$(inv.amount_due)} (${reducePct(inv.amount_due, inv.total_amount)}%)`,
+            `Due: Tk ${fmt$(inv.due_amount ?? 0)}`,
+            `VAT Reduce: Tk ${fmt$(inv.vat_reduce ?? 0)} (${reducePct(inv.vat_reduce ?? 0, inv.total_amount)}%)`,
             `Status: ${inv.status}`,
         ].join("\n");
         if (navigator.share) {
@@ -256,30 +261,27 @@ export default function Payments({ parties }: { parties: Party[] }) {
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;font-weight:600;">${inv.invoice_number}</td>
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;">${inv.party_name || '—'}</td>
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;">${fmtDate(inv.date)}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#dc2626;">Tk ${fmt$(inv.due_amount ?? 0)}</td>
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;">Tk ${fmt$(inv.total_amount)}</td>
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#16a34a;">Tk ${fmt$(inv.amount_paid)}</td>
-                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#dc2626;">Tk ${fmt$(inv.amount_due)} (${reducePct(inv.amount_due, inv.total_amount)}%)</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#dc2626;">Tk ${fmt$(inv.vat_reduce ?? 0)} (${reducePct(inv.vat_reduce ?? 0, inv.total_amount)}%)</td>
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:center;text-transform:capitalize;">${inv.status === 'pending' ? 'Unpaid' : inv.status}</td>
             </tr>`;
         });
-        const totalPaid = invoices.reduce((s, i) => s + (i.amount_paid || 0), 0);
-        const totalDue = invoices.reduce((s, i) => s + (i.amount_due || 0), 0);
-        const totalAmount = invoices.reduce((s, i) => s + (i.total_amount || 0), 0);
+        const totalPaid = invoices.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
+        const totalDue = invoices.reduce((s, i) => s + Number(i.due_amount ?? 0), 0);
+        const totalVatReduce = invoices.reduce((s, i) => s + Number(i.vat_reduce ?? 0), 0);
+        const totalAmount = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
         const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Payment Report</title>
         <style>@page{size:A4 landscape;margin:10mm;}body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:20px;font-size:13px;}</style></head><body>
         <div style="text-align:center;margin-bottom:20px;"><h1 style="font-size:26px;margin:0;color:#0f172a;text-transform:uppercase;letter-spacing:2px;">PAYMENT REPORT</h1></div>
-        <div style="display:flex;gap:24px;margin-bottom:16px;font-size:13px;">
-            <div><strong>Total Invoices:</strong> ${invoices.length}</div>
-            <div><strong>Total Amount:</strong> Tk ${fmt$(totalAmount)}</div>
-            <div style="color:#16a34a;"><strong>Total Paid:</strong> Tk ${fmt$(totalPaid)}</div>
-            <div style="color:#dc2626;"><strong>Total VAT Reduce:</strong> Tk ${fmt$(totalDue)} (${reducePct(totalDue, totalAmount)}%)</div>
-        </div>
         <table style="width:100%;border-collapse:collapse;">
             <thead><tr style="background:#f1f5f9;">
                 <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;width:30px;">#</th>
                 <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;">Invoice</th>
                 <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;">Party</th>
                 <th style="padding:8px 10px;border:1px solid #000;text-align:left;font-size:11px;text-transform:uppercase;">Date</th>
+                <th style="padding:8px 10px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:90px;">Due</th>
                 <th style="padding:8px 10px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:100px;">Amount</th>
                 <th style="padding:8px 10px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:100px;">Paid</th>
                 <th style="padding:8px 10px;border:1px solid #000;text-align:right;font-size:11px;text-transform:uppercase;width:140px;">VAT Reduce</th>
@@ -287,6 +289,16 @@ export default function Payments({ parties }: { parties: Party[] }) {
             </tr></thead>
             <tbody>${rows}</tbody>
         </table>
+        <div style="margin-top:24px;border:1px solid #000;background:#f8fafc;padding:12px 16px;font-size:13px;font-weight:bold;">
+            <div style="margin-bottom:8px;text-transform:uppercase;font-size:11px;color:#475569;">Summary</div>
+            <div style="display:flex;flex-wrap:wrap;gap:16px 32px;">
+                <div><strong>Total Invoices:</strong> ${invoices.length}</div>
+                <div><strong>Total Amount:</strong> Tk ${fmt$(totalAmount)}</div>
+                <div style="color:#dc2626;"><strong>Total Due:</strong> Tk ${fmt$(totalDue)}</div>
+                <div style="color:#16a34a;"><strong>Total Paid:</strong> Tk ${fmt$(totalPaid)}</div>
+                <div style="color:#dc2626;"><strong>Total VAT Reduce:</strong> Tk ${fmt$(totalVatReduce)} (${reducePct(totalVatReduce, totalAmount)}%)</div>
+            </div>
+        </div>
         <div style="margin-top:30px;text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">Generated by M/S Noor Hotel and Restaurant</div>
         </body></html>`;
         const win = window.open('', '_blank', 'width=1000,height=600');
@@ -303,7 +315,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const to = Math.min(page * limit, total);
     const totalAmountSum = invoices.reduce((s, i) => s + Number(i.total_amount || 0), 0);
     const totalPaidSum = invoices.reduce((s, i) => s + Number(i.amount_paid || 0), 0);
-    const totalDueSum = invoices.reduce((s, i) => s + Number(i.amount_due || 0), 0);
+    const totalDueAmountSum = invoices.reduce((s, i) => s + Number(i.due_amount ?? 0), 0);
+    const totalVatReduceSum = invoices.reduce((s, i) => s + Number(i.vat_reduce ?? 0), 0);
 
     return (
         <>
@@ -437,7 +450,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Number</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Party</th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due</th>
+                                    <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due Date</th>
+                                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due</th>
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Amount</th>
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Paid</th>
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">VAT Reduce</th>
@@ -449,7 +463,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
                             <tbody>
                                 {invoices.length === 0 ? (
                                     <tr>
-                                        <td colSpan={10} className="px-4 py-16 text-center">
+                                        <td colSpan={11} className="px-4 py-16 text-center">
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                                 <CreditCard className="size-8 opacity-40" />
                                                 <p className="text-sm font-medium">No invoices found</p>
@@ -463,12 +477,13 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                             <td className="px-4 py-3 text-xs font-medium">{inv.party_name || '—'}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(inv.date)}</td>
                                             <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(inv.due_date)}</td>
+                                            <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">Tk {fmt$(inv.due_amount ?? 0)}</td>
                                             <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">Tk {fmt$(inv.total_amount)}</td>
                                             <td className="px-4 py-3 text-right text-xs text-green-600 tabular-nums">Tk {fmt$(inv.amount_paid)}</td>
                                             <td className="px-4 py-3 text-right text-xs text-red-600 tabular-nums">
-                                                Tk {fmt$(inv.amount_due)}
+                                                Tk {fmt$(inv.vat_reduce ?? 0)}
                                                 <span className="block text-[10px] font-normal text-muted-foreground">
-                                                    ({reducePct(inv.amount_due, inv.total_amount)}%)
+                                                    ({reducePct(inv.vat_reduce ?? 0, inv.total_amount)}%)
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
@@ -517,12 +532,13 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                 <tfoot>
                                     <tr className="border-t-2 border-sidebar-border/70 bg-muted/30 dark:border-sidebar-border">
                                         <td colSpan={4} className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</td>
+                                        <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">Tk {fmt$(totalDueAmountSum)}</td>
                                         <td className="px-4 py-3 text-right text-xs font-bold tabular-nums">Tk {fmt$(totalAmountSum)}</td>
                                         <td className="px-4 py-3 text-right text-xs font-bold text-green-600 tabular-nums">Tk {fmt$(totalPaidSum)}</td>
                                         <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">
-                                            Tk {fmt$(totalDueSum)}
+                                            Tk {fmt$(totalVatReduceSum)}
                                             <span className="block text-[10px] font-normal text-muted-foreground">
-                                                ({reducePct(totalDueSum, totalAmountSum)}%)
+                                                ({reducePct(totalVatReduceSum, totalAmountSum)}%)
                                             </span>
                                         </td>
                                         <td colSpan={3} />
@@ -557,7 +573,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
                             Record Payment
                         </DialogTitle>
                         <DialogDescription className="text-xs">
-                            {paying?.invoice_number} &mdash; Due: Tk {fmt$(paying?.amount_due || 0)}
+                            {paying?.invoice_number} &mdash; Due: Tk {fmt$(paying?.due_amount ?? (paying?.amount_due || 0))}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
@@ -565,11 +581,11 @@ export default function Payments({ parties }: { parties: Party[] }) {
                             <Label className="text-xs font-medium text-muted-foreground">Amount *</Label>
                             <Input type="number" value={payAmount} onChange={(e) => {
                                 setPayAmount(e.target.value);
-                                const due = paying?.amount_due || 0;
+                                const due = paying?.due_amount ?? (paying?.amount_due || 0);
                                 const paid = parseFloat(e.target.value) || 0;
                                 const diff = Math.max(0, due - paid);
                                 setPayReduceAmount(diff > 0 ? String(diff) : '');
-                            }} min={0} max={paying?.amount_due} step="0.01" />
+                            }} min={0} max={paying?.due_amount ?? paying?.amount_due} step="0.01" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-1.5">

@@ -4,6 +4,7 @@ use App\Http\Controllers\party\ChallanController;
 use App\Http\Controllers\party\InvoiceController;
 use App\Http\Controllers\party\PartyController;
 use App\Http\Controllers\party\ProductController;
+use App\Http\Controllers\reports\PurchaseReportController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('party', [PartyController::class, 'store']);
@@ -35,3 +36,5 @@ Route::get('invoices/{id}/print', [InvoiceController::class, 'print']);
 Route::patch('invoices/{id}/status', [InvoiceController::class, 'updateStatus']);
 Route::get('invoices/{id}/payment-history', [InvoiceController::class, 'paymentHistory']);
 Route::get('payments/report', [InvoiceController::class, 'report']);
+
+Route::get('reports/purchase', [PurchaseReportController::class, 'index']);

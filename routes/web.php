@@ -95,6 +95,30 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
     })->name('payments');
 
+    Route::get('report', function () {
+        return Inertia::render('noor-hotel/reports/report');
+    })->name('report');
+
+    Route::get('report/purchase', function () {
+        $parties = Party::select('id', 'party_name')->get();
+
+        return Inertia::render('noor-hotel/reports/purchase-report', [
+            'parties' => $parties,
+        ]);
+    })->name('report.purchase');
+
+    Route::get('report/challan', function () {
+        return Inertia::render('noor-hotel/reports/challan-report');
+    })->name('report.challan');
+
+    Route::get('report/invoice', function () {
+        return Inertia::render('noor-hotel/reports/invoice-report');
+    })->name('report.invoice');
+
+    Route::get('report/payment', function () {
+        return Inertia::render('noor-hotel/reports/payment-report');
+    })->name('report.payment');
+
     Route::get('emails', EmailedPurchaseOrdersController::class)->name('emails');
 
     Route::middleware(['role:super_admin,admin'])->prefix('admin')->name('admin.')->group(function () {
