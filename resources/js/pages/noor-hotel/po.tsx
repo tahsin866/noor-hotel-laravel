@@ -40,10 +40,12 @@ import {
     AlertTriangle,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     ClipboardList,
     Printer,
     Mail,
     FileDown,
+    Search,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -139,7 +141,7 @@ function MealFormFieldsInner({
                                         <SelectItem value="breakfast">Breakfast</SelectItem>
                                         <SelectItem value="lunch">Lunch</SelectItem>
                                         <SelectItem value="dinner">Dinner</SelectItem>
-                                        <SelectItem value="snack">Snack</SelectItem>
+                                        <SelectItem value="snack">Snacks</SelectItem>
                                         <SelectItem value="morning_snacks">Morning Snacks</SelectItem>
                                         <SelectItem value="evening_snacks">Evening Snacks</SelectItem>
                                         <SelectItem value="hot_meal">Hot Meal</SelectItem>
@@ -393,7 +395,10 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(10);
     const [filter, setFilter] = useState('all');
+    const [search, setSearch] = useState('');
     const [partyFilter, setPartyFilter] = useState('');
+    const [partyFilterOpen, setPartyFilterOpen] = useState(false);
+    const [partyFilterSearch, setPartyFilterSearch] = useState('');
 
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
@@ -421,6 +426,10 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         p.party_name.toLowerCase().includes(partySearch.toLowerCase())
     );
 
+    const filteredFilterParties = parties.filter((p) =>
+        p.party_name.toLowerCase().includes(partyFilterSearch.toLowerCase())
+    );
+
     const fetchProducts = useCallback(async () => {
         try {
             const params = new URLSearchParams();
@@ -428,6 +437,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             params.set('limit', String(limit));
             if (filter !== 'all') params.set('status', filter);
             if (partyFilter) params.set('party_id', partyFilter);
+            if (search.trim()) params.set('search', search.trim());
             const res = await fetch(`/api/products?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -437,7 +447,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         } catch {
             toast.error('Failed to load purchase orders');
         }
-    }, [page, limit, filter, partyFilter]);
+    }, [page, limit, filter, partyFilter, search]);
 
     useEffect(() => {
         fetchProducts();
@@ -833,16 +843,96 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                             </button>
                         ))}
                     </div>
-                    <select
-                        value={partyFilter}
-                        onChange={(e) => { setPartyFilter(e.target.value); setPage(1); }}
-                        className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            placeholder="Search by PO, name or customer PO..."
+                            value={search}
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                setPage(1);
+                            }}
+                            className="h-8 w-56 pl-8 text-xs"
+                        />
+                    </div>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setPartyFilterOpen((v) => !v)}
+                            className="flex h-8 w-48 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                        >
+                            <span className="whitespace-nowrap">
+                                {partyFilter ? parties.find((p) => p.id === Number(partyFilter))?.party_name || 'All Parties' : 'All Parties'}
+                            </span>
+                            <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+                        </button>
+                        {partyFilterOpen && (
+                            <>
+                                <div className="absolute z-50 mt-1 w-full min-w-80 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                    <Input
+                                        autoFocus
+                                        placeholder="Search party..."
+                                        value={partyFilterSearch}
+                                        onChange={(e) => setPartyFilterSearch(e.target.value)}
+                                        className="h-7 text-xs"
+                                    />
+                                    <div className="mt-1 max-h-60 overflow-auto">
+                                        <button
+                                            type="button"
+                                            className={`w-full rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
+                                            onClick={() => {
+                                                setPartyFilter('');
+                                                setPartyFilterOpen(false);
+                                                setPartyFilterSearch('');
+                                                setPage(1);
+                                            }}
+                                        >
+                                            All Parties 
+                                        </button>
+                                        {filteredFilterParties.length === 0 ? (
+                                            <div className="px-3 py-6 text-center text-xs text-muted-foreground">No parties found</div>
+                                        ) : (
+                                            filteredFilterParties.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    className={`w-full rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    onClick={() => {
+                                                        setPartyFilter(String(p.id));
+                                                        setPartyFilterOpen(false);
+                                                        setPartyFilterSearch('');
+                                                        setPage(1);
+                                                    }}
+                                                >
+                                                    {p.party_name}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                                <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => {
+                                        setPartyFilterOpen(false);
+                                        setPartyFilterSearch('');
+                                    }}
+                                />
+                            </>
+                        )}
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => {
+                            setFilter('all');
+                            setSearch('');
+                            setPartyFilter('');
+                            setPage(1);
+                        }}
                     >
-                        <option value="">All Parties</option>
-                        {parties.map((p) => (
-                            <option key={p.id} value={p.id}>{p.party_name}</option>
-                        ))}
-                    </select>
+                        Clear
+                    </Button>
                     <span className="ml-auto text-xs font-medium text-muted-foreground">
                         {total} order{total === 1 ? '' : 's'} total
                     </span>
@@ -1027,7 +1117,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                         </DialogTitle>
                     </DialogHeader>
                     {viewingProduct && (
-                        <div className="space-y-5">
+                        <div className="space-y-5 max-h-[65vh] overflow-y-auto py-1 pr-1">
                             <div className="rounded-lg border border-border">
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-4 p-4 md:grid-cols-3">
                                     <div>

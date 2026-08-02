@@ -636,10 +636,10 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
 
                             <div className="flex items-center gap-1">
                                 <span>per page:</span>
-                                <Select
+                                <select
                                     value={String(filters.per_page)}
-                                    onValueChange={(value) => {
-                                        const perPage = Number(value);
+                                    onChange={(e) => {
+                                        const perPage = Number(e.target.value);
                                         setFilters((prev) => ({ ...prev, per_page: perPage }));
                                         const params: Record<string, string | number> = { per_page: perPage };
                                         if (filters.search) params.search = filters.search;
@@ -649,17 +649,13 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                                         if (filters.end_date_to) params.end_date_to = filters.end_date_to;
                                         router.get('/party', params, { preserveState: true, preserveScroll: true });
                                     }}
+                                    className="flex h-8 w-20 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
                                 >
-                                    <SelectTrigger className="h-8 w-20">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="10">10</SelectItem>
-                                        <SelectItem value="20">20</SelectItem>
-                                        <SelectItem value="50">50</SelectItem>
-                                        <SelectItem value="100">100</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
                             </div>
                         </div>
 

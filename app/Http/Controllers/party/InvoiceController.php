@@ -23,7 +23,7 @@ class InvoiceController extends Controller
         $dateTo = $request->get('date_to');
         $search = $request->get('search');
 
-        $query = Invoice::with(['party', 'items.product'])
+        $query = Invoice::with(['party', 'items.product', 'paymentHistory'])
             ->orderByDesc('created_at');
 
         if ($status) {
@@ -65,6 +65,11 @@ class InvoiceController extends Controller
                 'total_amount' => $item->total_amount,
                 'amount_paid' => $item->amount_paid,
                 'amount_due' => $item->amount_due,
+                'attachments' => $item->paymentHistory
+                    ->filter(fn ($p) => ! empty($p->attachment))
+                    ->map(fn ($p) => Storage::disk('public')->url($p->attachment))
+                    ->values()
+                    ->all(),
                 'status' => $item->status,
                 'created_at' => $item->created_at,
             ];

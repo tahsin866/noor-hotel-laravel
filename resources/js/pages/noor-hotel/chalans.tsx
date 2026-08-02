@@ -31,6 +31,7 @@ import {
     Package,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Truck,
     Search,
     AlertTriangle,
@@ -112,6 +113,20 @@ const mealBadge: Record<string, string> = {
     snack: 'bg-pink-100 text-pink-700',
 };
 
+const mealLabels: Record<string, string> = {
+    breakfast: 'Breakfast',
+    lunch: 'Lunch',
+    dinner: 'Dinner',
+    snack: 'Snacks',
+    morning_snacks: 'Morning Snacks',
+    evening_snacks: 'Evening Snacks',
+    hot_meal: 'Hot Meal',
+};
+
+const formatMealType = (type: string) =>
+    mealLabels[type] ||
+    type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
 function fmt$(n: number | string) {
     return Number(n || 0).toFixed(2);
 }
@@ -170,6 +185,25 @@ function ChallanForm({
     grandTotal: number;
     onCancel: () => void;
 }) {
+    const [partySearch, setPartySearch] = useState('');
+    const [partyOpen, setPartyOpen] = useState(false);
+    const [poSearch, setPoSearch] = useState('');
+    const [poOpen, setPoOpen] = useState(false);
+
+    const filteredPartyOptions = parties.filter((p) =>
+        p.party_name.toLowerCase().includes(partySearch.toLowerCase())
+    );
+
+    const filteredPoOptions = filteredProducts.filter((p) =>
+        `${p.code} ${p.name}`.toLowerCase().includes(poSearch.toLowerCase())
+    );
+
+    const selectedPartyLabel = formParty
+        ? parties.find((p) => p.id === Number(formParty))?.party_name || 'All Parties'
+        : 'All Parties';
+
+    const selectedPoObj = selectedPo ? filteredProducts.find((p) => p.id === Number(selectedPo)) : null;
+
     return (
         <>
             <DialogHeader className="space-y-1 border-b border-border pb-4">
@@ -185,18 +219,56 @@ function ChallanForm({
                 <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Party *</Label>
-                        <select
-                            value={formParty}
-                            onChange={(e) => {
-                                setFormParty(e.target.value);
-                            }}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            <option value="">All Parties</option>
-                            {parties.map((p) => (
-                                <option key={p.id} value={p.id}>{p.party_name}</option>
-                            ))}
-                        </select>
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setPartyOpen((v) => !v)}
+                                className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                            >
+                                <span className="truncate">{selectedPartyLabel}</span>
+                                <ChevronDown className="size-4 shrink-0 opacity-50" />
+                            </button>
+                            {partyOpen && (
+                                <>
+                                    <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                        <Input
+                                            autoFocus
+                                            placeholder="Search party..."
+                                            value={partySearch}
+                                            onChange={(e) => setPartySearch(e.target.value)}
+                                            className="h-8 text-sm"
+                                        />
+                                        <div className="mt-1 max-h-52 overflow-auto">
+                                            {filteredPartyOptions.length === 0 ? (
+                                                <div className="px-3 py-4 text-center text-sm text-muted-foreground">No parties found</div>
+                                            ) : (
+                                                filteredPartyOptions.map((p) => (
+                                                    <button
+                                                        key={p.id}
+                                                        type="button"
+                                                        className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${formParty === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                        onClick={() => {
+                                                            setFormParty(String(p.id));
+                                                            setPartyOpen(false);
+                                                            setPartySearch('');
+                                                        }}
+                                                    >
+                                                        {p.party_name}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div
+                                        className="fixed inset-0 z-40"
+                                        onClick={() => {
+                                            setPartyOpen(false);
+                                            setPartySearch('');
+                                        }}
+                                    />
+                                </>
+                            )}
+                        </div>
                     </div>
                     <div className="grid gap-1.5">
                         <Label className="text-xs font-medium text-muted-foreground">Date *</Label>
@@ -206,21 +278,63 @@ function ChallanForm({
 
                 <div className="grid gap-1.5">
                     <Label className="text-xs font-medium text-muted-foreground">PO (Product) *</Label>
-                    <select
-                        value={selectedPo}
-                        onChange={(e) => loadPoDetails(e.target.value)}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        <option value="">Select PO (Product)</option>
-                        {filteredProducts.map((p) => {
-                            const remaining = (p.meals || []).reduce((sum, m) => sum + Math.max(0, m.quantity - (m.delivered_quantity || 0)), 0);
-                            return (
-                                <option key={p.id} value={p.id}>
-                                    {p.code} - {p.name} [{remaining} remaining]
-                                </option>
-                            );
-                        })}
-                    </select>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setPoOpen((v) => !v)}
+                            className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                        >
+                            <span className="truncate">
+                                {selectedPoObj ? `${selectedPoObj.code} - ${selectedPoObj.name}` : 'Select PO (Product)'}
+                            </span>
+                            <ChevronDown className="size-4 shrink-0 opacity-50" />
+                        </button>
+                        {poOpen && (
+                            <>
+                                <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                    <Input
+                                        autoFocus
+                                        placeholder="Search by code or name..."
+                                        value={poSearch}
+                                        onChange={(e) => setPoSearch(e.target.value)}
+                                        className="h-8 text-sm"
+                                    />
+                                    <div className="mt-1 max-h-52 overflow-auto">
+                                        {filteredPoOptions.length === 0 ? (
+                                            <div className="px-3 py-4 text-center text-sm text-muted-foreground">No products found</div>
+                                        ) : (
+                                            filteredPoOptions.map((p) => {
+                                                const remaining = (p.meals || []).reduce((sum, m) => sum + Math.max(0, m.quantity - (m.delivered_quantity || 0)), 0);
+
+                                                return (
+                                                    <button
+                                                        key={p.id}
+                                                        type="button"
+                                                        className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${selectedPo === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                        onClick={() => {
+                                                            loadPoDetails(String(p.id));
+                                                            setPoOpen(false);
+                                                            setPoSearch('');
+                                                        }}
+                                                    >
+                                                        <span className="block truncate">{p.code} - {p.name}</span>
+                                                        <span className="block text-xs text-muted-foreground">[{remaining} remaining]</span>
+                                                    </button>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                                <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => {
+                                        setPoOpen(false);
+                                        setPoSearch('');
+                                    }}
+                                />
+                            </>
+                        )}
+                    </div>
                 </div>
 
                 {poInfo && (
@@ -280,7 +394,7 @@ function ChallanForm({
                                     <div className="mb-2 flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${mealBadge[it.meal_type] || 'bg-slate-100 text-slate-600'}`}>
-                                                {it.meal_type.charAt(0).toUpperCase() + it.meal_type.slice(1)}
+                                                {formatMealType(it.meal_type)}
                                             </span>
                                             <span className="text-xs text-muted-foreground">৳{fmt$(it.unit_price)}/unit</span>
                                         </div>
@@ -333,6 +447,8 @@ export default function Challans({ products, parties }: { products: Product[]; p
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
     const [partyFilter, setPartyFilter] = useState('');
+    const [partyFilterOpen, setPartyFilterOpen] = useState(false);
+    const [partyFilterSearch, setPartyFilterSearch] = useState('');
     const [createOpen, setCreateOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [viewOpen, setViewOpen] = useState(false);
@@ -351,6 +467,10 @@ export default function Challans({ products, parties }: { products: Product[]; p
     const [notes, setNotes] = useState('');
     const [poInfo, setPoInfo] = useState<Product | null>(null);
     const [items, setItems] = useState<FormItem[]>([]);
+
+    const filteredFilterParties = parties.filter((p) =>
+        p.party_name.toLowerCase().includes(partyFilterSearch.toLowerCase())
+    );
 
     const fetchChallans = useCallback(async () => {
         try {
@@ -687,7 +807,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                             `<tr>
                                 <td style="width:20px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
                                 <td style="padding:6px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
-                                <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;">${it.meal_type.charAt(0).toUpperCase() + it.meal_type.slice(1)}</td>
+                                                        <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">${formatMealType(it.meal_type)}</td>
                                 <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
                             </tr>`,
                 )
@@ -849,16 +969,71 @@ export default function Challans({ products, parties }: { products: Product[]; p
                             className="h-8 w-56 pl-8 text-xs"
                         />
                     </div>
-                    <select
-                        value={partyFilter}
-                        onChange={(e) => { setPartyFilter(e.target.value); setPage(1); }}
-                        className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        <option value="">All Parties</option>
-                        {parties.map((p) => (
-                            <option key={p.id} value={p.id}>{p.party_name}</option>
-                        ))}
-                    </select>
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setPartyFilterOpen((v) => !v)}
+                            className="flex h-8 w-56 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
+                        >
+                            <span className="whitespace-nowrap">
+                                {partyFilter ? parties.find((p) => p.id === Number(partyFilter))?.party_name || 'All Parties' : 'All Parties'}
+                            </span>
+                            <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+                        </button>
+                        {partyFilterOpen && (
+                            <>
+                                <div className="absolute z-50 mt-1 w-full min-w-56 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                    <Input
+                                        autoFocus
+                                        placeholder="Search party..."
+                                        value={partyFilterSearch}
+                                        onChange={(e) => setPartyFilterSearch(e.target.value)}
+                                        className="h-7 text-xs"
+                                    />
+                                    <div className="mt-1 max-h-60 overflow-auto">
+                                        <button
+                                            type="button"
+                                            className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
+                                            onClick={() => {
+                                                setPartyFilter('');
+                                                setPartyFilterOpen(false);
+                                                setPartyFilterSearch('');
+                                                setPage(1);
+                                            }}
+                                        >
+                                            All Parties
+                                        </button>
+                                        {filteredFilterParties.length === 0 ? (
+                                            <div className="px-3 py-6 text-center text-sm text-muted-foreground">No parties found</div>
+                                        ) : (
+                                            filteredFilterParties.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    onClick={() => {
+                                                        setPartyFilter(String(p.id));
+                                                        setPartyFilterOpen(false);
+                                                        setPartyFilterSearch('');
+                                                        setPage(1);
+                                                    }}
+                                                >
+                                                    {p.party_name}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                                <div
+                                    className="fixed inset-0 z-40"
+                                    onClick={() => {
+                                        setPartyFilterOpen(false);
+                                        setPartyFilterSearch('');
+                                    }}
+                                />
+                            </>
+                        )}
+                    </div>
                     <span className="ml-auto text-xs font-medium text-muted-foreground">
                         {total} challan{total === 1 ? '' : 's'} total
                     </span>
@@ -889,7 +1064,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                                     `<tr>
                                                         <td style="width:20px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
                                                         <td style="padding:6px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
-                                                        <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;">${it.meal_type.charAt(0).toUpperCase() + it.meal_type.slice(1)}</td>
+                                <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">${formatMealType(it.meal_type)}</td>
                                                         <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
                                                     </tr>`
                                             ).join('');
@@ -1341,7 +1516,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                             const line = it.quantity * (it.unit_price || 0);
                                             return (
                                                 <tr key={i} className="border-t border-border first:border-t-0">
-                                                    <td className="px-3 py-2 text-xs">{it.product_name} ({it.meal_type})</td>
+                                                    <td className="px-3 py-2 text-xs">{it.product_name} ({formatMealType(it.meal_type)})</td>
                                                     <td className="px-3 py-2 text-center text-xs tabular-nums">{it.quantity}</td>
                                                     <td className="px-3 py-2 text-right text-xs tabular-nums">৳{fmt$(it.unit_price || 0)}</td>
                                                     <td className="px-3 py-2 text-right text-xs font-semibold tabular-nums">৳{fmt$(line)}</td>

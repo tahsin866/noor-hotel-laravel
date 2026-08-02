@@ -21,12 +21,22 @@ class ProductController extends Controller
 
         $status = $request->get('status');
         $partyId = $request->get('party_id');
+        $search = $request->get('search');
 
         $query->withSum('meals as total_ordered', 'quantity')
             ->withSum('meals as total_delivered', 'delivered_quantity');
 
         if ($partyId) {
             $query->where('products.party_id', $partyId);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('products.code', 'like', "%{$search}%")
+                    ->orWhere('products.name', 'like', "%{$search}%")
+                    ->orWhere('products.customer_po_number', 'like', "%{$search}%")
+                    ->orWhere('parties.party_name', 'like', "%{$search}%");
+            });
         }
 
         if ($status && $status !== 'all') {
