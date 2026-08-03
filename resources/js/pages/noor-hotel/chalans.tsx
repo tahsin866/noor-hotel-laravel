@@ -881,7 +881,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                 </tr>
             </table>
         </div>
-                <div class="footer">Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; M/S Noor Hotel and restaurant</div>
+                <div class="footer">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
     </div>
 </body>
 </html>`;
@@ -1119,7 +1119,7 @@ export default function Challans({ products, parties }: { products: Product[]; p
                                                                 </tr>
                                                             </table>
                                                         </div>
-                                                        <div class="footer">Generated on ${new Date().toLocaleDateString('en-GB')} &mdash; Noor Hotel PRG</div>
+                                                        <div class="footer">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
                                                     </div>
                                                 </div>`;
                                             idx++;

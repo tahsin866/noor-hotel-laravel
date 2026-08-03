@@ -38,6 +38,12 @@ test('purchase report endpoint returns success with data', function () {
                         'subtotal',
                         'vat',
                         'total',
+                        'delivered_subtotal',
+                        'delivered_vat',
+                        'delivered_total',
+                        'remaining_subtotal',
+                        'remaining_vat',
+                        'remaining_total',
                         'status',
                     ],
                 ],
@@ -49,6 +55,12 @@ test('purchase report endpoint returns success with data', function () {
                     'total_subtotal',
                     'total_vat',
                     'total_amount',
+                    'total_delivered_subtotal',
+                    'total_delivered_vat',
+                    'total_delivered_amount',
+                    'total_remaining_subtotal',
+                    'total_remaining_vat',
+                    'total_remaining_amount',
                 ],
             ],
         ]);
@@ -182,4 +194,37 @@ test('purchase report summary calculates correctly', function () {
     expect($summary['total_subtotal'])->toBe(1000);
     expect($summary['total_vat'])->toBe(100);
     expect($summary['total_amount'])->toBe(1100);
+});
+
+test('purchase report splits delivered and remaining amounts', function () {
+    $party = Party::factory()->create();
+    $product = Product::factory()->create(['party_id' => $party->id, 'vat_rate' => 10]);
+    ProductMeal::factory()->create([
+        'product_id' => $product->id,
+        'quantity' => 3450,
+        'unit_price' => 40,
+        'delivered_quantity' => 420,
+    ]);
+
+    $response = $this->get('/api/reports/purchase');
+
+    $response->assertOk();
+    $row = $response->json('data.rows.0');
+    $summary = $response->json('data.summary');
+
+    expect($row['total_ordered'])->toBe(3450);
+    expect($row['total_delivered'])->toBe(420);
+    expect($row['remaining'])->toBe(3030);
+    expect($row['subtotal'])->toBe(138000);
+    expect($row['delivered_subtotal'])->toBe(16800);
+    expect($row['delivered_total'])->toBe(18480);
+    expect($row['remaining_subtotal'])->toBe(121200);
+    expect($row['remaining_total'])->toBe(133320);
+    expect($row['delivered_total'] + $row['remaining_total'])->toBe($row['total']);
+
+    expect($summary['total_delivered_subtotal'])->toBe(16800);
+    expect($summary['total_delivered_amount'])->toBe(18480);
+    expect($summary['total_remaining_subtotal'])->toBe(121200);
+    expect($summary['total_remaining_amount'])->toBe(133320);
+    expect($summary['total_delivered_amount'] + $summary['total_remaining_amount'])->toBe($summary['total_amount']);
 });

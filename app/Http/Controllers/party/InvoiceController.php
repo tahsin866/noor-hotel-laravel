@@ -76,6 +76,7 @@ class InvoiceController extends Controller
                     ->values()
                     ->all(),
                 'status' => $item->status,
+                'print_status' => $item->print_status,
                 'created_at' => $item->created_at,
             ];
         });
@@ -149,8 +150,10 @@ class InvoiceController extends Controller
             return [
                 'id' => $ch->id,
                 'challan_number' => $ch->challan_number,
+                'product_id' => $ch->product_id,
                 'product_name' => $ch->product->name ?? '-',
                 'po_number' => $ch->product->code ?? '-',
+                'party_id' => $ch->product->party_id ?? null,
                 'party_name' => $ch->product->party->party_name ?? '-',
                 'challan_date' => $ch->date,
                 'challan_status' => $ch->status,
@@ -176,6 +179,7 @@ class InvoiceController extends Controller
                 'amount_paid' => $invoice->amount_paid,
                 'amount_due' => $invoice->amount_due,
                 'status' => $invoice->status,
+                'print_status' => $invoice->print_status,
                 'notes' => $invoice->notes,
                 'customer_po_number' => $customerPoNumber,
                 'items' => $items,
@@ -193,6 +197,14 @@ class InvoiceController extends Controller
         $invoice->delete();
 
         return response()->json(['success' => true, 'message' => 'Invoice deleted']);
+    }
+
+    public function markPrinted($id)
+    {
+        $invoice = Invoice::findOrFail($id);
+        $invoice->update(['print_status' => 'printed']);
+
+        return response()->json(['success' => true, 'message' => 'Invoice marked as printed']);
     }
 
     public function store(Request $request)
@@ -215,6 +227,95 @@ class InvoiceController extends Controller
             return response()->json(['success' => false, 'message' => 'No valid challans found'], 422);
         }
 
+        $built = $this->buildItemsFromChallans($challans);
+
+        $totalAmount = $built['total_amount'];
+
+        $invoice = Invoice::create([
+            'party_id' => $request->party_id,
+            'user_id' => $request->user()->id ?? 1,
+            'date' => $request->date,
+            'due_date' => $request->due_date,
+            'subtotal' => round($built['subtotal'], 2),
+            'total_vat' => round($built['total_vat'], 2),
+            'total_amount' => round($totalAmount, 2),
+            'amount_paid' => 0,
+            'amount_due' => round($totalAmount, 2),
+            'notes' => $request->notes,
+        ]);
+
+        foreach ($built['items'] as $item) {
+            $invoice->items()->create($item);
+        }
+
+        $invoice->challans()->attach($challanIds);
+
+        return response()->json(['success' => true, 'message' => 'Invoice created']);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $invoice = Invoice::findOrFail($id);
+
+        $request->validate([
+            'party_id' => 'required|exists:parties,id',
+            'date' => 'required|date',
+            'due_date' => 'required|date',
+            'notes' => 'nullable|string',
+            'challan_ids' => 'required|array|min:1',
+            'challan_ids.*' => 'exists:challans,id',
+        ]);
+
+        $challanIds = $request->challan_ids;
+        $challans = Challan::with(['product', 'product.party', 'items.productMeal.product'])
+            ->whereIn('id', $challanIds)
+            ->get();
+
+        if ($challans->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'No valid challans found'], 422);
+        }
+
+        $built = $this->buildItemsFromChallans($challans);
+
+        $invoice->update([
+            'party_id' => $request->party_id,
+            'date' => $request->date,
+            'due_date' => $request->due_date,
+            'subtotal' => round($built['subtotal'], 2),
+            'total_vat' => round($built['total_vat'], 2),
+            'total_amount' => round($built['total_amount'], 2),
+            'notes' => $request->notes,
+        ]);
+
+        $amountPaid = min((float) $invoice->amount_paid, (float) $built['total_amount']);
+        $amountDue = round(max(0, (float) $built['total_amount'] - $amountPaid), 2);
+
+        if ($amountDue <= 0) {
+            $status = 'paid';
+        } elseif ($amountPaid > 0) {
+            $status = 'partial';
+        } else {
+            $status = 'pending';
+        }
+
+        $invoice->update([
+            'amount_paid' => round($amountPaid, 2),
+            'amount_due' => $amountDue,
+            'status' => $status,
+        ]);
+
+        $invoice->items()->delete();
+        foreach ($built['items'] as $item) {
+            $invoice->items()->create($item);
+        }
+
+        $invoice->challans()->sync($challanIds);
+
+        return response()->json(['success' => true, 'message' => 'Invoice updated']);
+    }
+
+    private function buildItemsFromChallans($challans): array
+    {
         $subtotal = 0;
         $totalVat = 0;
         $grouped = [];
@@ -255,30 +356,12 @@ class InvoiceController extends Controller
             }
         }
 
-        $invItems = array_values($grouped);
-
-        $totalAmount = $subtotal + $totalVat;
-
-        $invoice = Invoice::create([
-            'party_id' => $request->party_id,
-            'user_id' => $request->user()->id ?? 1,
-            'date' => $request->date,
-            'due_date' => $request->due_date,
-            'subtotal' => round($subtotal, 2),
-            'total_vat' => round($totalVat, 2),
-            'total_amount' => round($totalAmount, 2),
-            'amount_paid' => 0,
-            'amount_due' => round($totalAmount, 2),
-            'notes' => $request->notes,
-        ]);
-
-        foreach ($invItems as $item) {
-            $invoice->items()->create($item);
-        }
-
-        $invoice->challans()->attach($challanIds);
-
-        return response()->json(['success' => true, 'message' => 'Invoice created']);
+        return [
+            'subtotal' => $subtotal,
+            'total_vat' => $totalVat,
+            'total_amount' => $subtotal + $totalVat,
+            'items' => array_values($grouped),
+        ];
     }
 
     public function updateStatus(Request $request, $id)

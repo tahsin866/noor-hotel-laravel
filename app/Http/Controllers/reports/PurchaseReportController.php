@@ -57,7 +57,13 @@ class PurchaseReportController extends Controller
 
         $rows = $products->map(function ($product) {
             $subtotal = $product->meals->sum(fn ($m) => $m->quantity * $m->unit_price);
+            $deliveredSubtotal = $product->meals->sum(fn ($m) => $m->delivered_quantity * $m->unit_price);
+            $remainingSubtotal = max(0, $subtotal - $deliveredSubtotal);
+
             $vat = round($subtotal * $product->vat_rate / 100, 2);
+            $deliveredVat = round($deliveredSubtotal * $product->vat_rate / 100, 2);
+            $remainingVat = round($remainingSubtotal * $product->vat_rate / 100, 2);
+
             $ordered = (int) $product->total_ordered;
             $delivered = (int) $product->total_delivered;
             $remaining = max(0, $ordered - $delivered);
@@ -77,6 +83,12 @@ class PurchaseReportController extends Controller
                 'subtotal' => $subtotal,
                 'vat' => $vat,
                 'total' => round($subtotal + $vat, 2),
+                'delivered_subtotal' => round($deliveredSubtotal, 2),
+                'delivered_vat' => $deliveredVat,
+                'delivered_total' => round($deliveredSubtotal + $deliveredVat, 2),
+                'remaining_subtotal' => round($remainingSubtotal, 2),
+                'remaining_vat' => $remainingVat,
+                'remaining_total' => round($remainingSubtotal + $remainingVat, 2),
                 'status' => $this->deliveryStatus($ordered, $delivered),
             ];
         });
@@ -89,6 +101,12 @@ class PurchaseReportController extends Controller
             'total_subtotal' => round($rows->sum('subtotal'), 2),
             'total_vat' => round($rows->sum('vat'), 2),
             'total_amount' => round($rows->sum('total'), 2),
+            'total_delivered_subtotal' => round($rows->sum('delivered_subtotal'), 2),
+            'total_delivered_vat' => round($rows->sum('delivered_vat'), 2),
+            'total_delivered_amount' => round($rows->sum('delivered_total'), 2),
+            'total_remaining_subtotal' => round($rows->sum('remaining_subtotal'), 2),
+            'total_remaining_vat' => round($rows->sum('remaining_vat'), 2),
+            'total_remaining_amount' => round($rows->sum('remaining_total'), 2),
         ];
 
         return response()->json([

@@ -22,6 +22,7 @@ class Invoice extends Model
         'amount_paid',
         'amount_due',
         'status',
+        'print_status',
         'notes',
     ];
 

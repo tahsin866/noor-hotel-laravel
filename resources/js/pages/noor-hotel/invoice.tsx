@@ -29,6 +29,7 @@ import {
     ChevronRight,
     Receipt,
     MoreHorizontal,
+    Pencil,
     Trash2,
     ChevronDown,
 } from 'lucide-react';
@@ -82,8 +83,10 @@ type InvoiceItem = {
 type InvoiceChallan = {
     id: number;
     challan_number: string;
+    product_id?: number | null;
     product_name: string;
     po_number: string;
+    party_id?: number | null;
     party_name: string;
     challan_date: string;
     challan_status: string;
@@ -102,6 +105,7 @@ type Invoice = {
     amount_paid: number;
     amount_due: number;
     status: string;
+    print_status: string;
     subtotal?: number;
     total_vat?: number;
     customer_po_number?: string;
@@ -127,6 +131,11 @@ const statusColors: Record<string, string> = {
     cancelled: 'bg-red-100 text-red-700',
 };
 
+const printBadge: Record<string, string> = {
+    printed: 'bg-green-100 text-green-700',
+    unprinted: 'bg-slate-100 text-slate-600',
+};
+
 function fmt$(n: number | string) {
     return Math.round(parseFloat(String(n || 0))).toLocaleString('en-US');
 }
@@ -139,6 +148,21 @@ function fmtDate(d: string) {
 function fmtMealBreakdown(items?: ChallanItem[]) {
     if (!items || items.length === 0) return '—';
     return items.map((it) => `${it.meal_type}/${it.quantity}`).join(', ');
+}
+
+function toChallanShape(c: InvoiceChallan): Challan {
+    return {
+        id: c.id,
+        challan_number: c.challan_number,
+        product_id: c.product_id ?? 0,
+        product_name: c.product_name,
+        po_number: c.po_number,
+        party_id: c.party_id ?? 0,
+        party_name: c.party_name,
+        date: c.challan_date,
+        status: c.challan_status,
+        items: c.items,
+    };
 }
 
 export default function Invoices({ parties, products, challans }: { parties: Party[]; products: Product[]; challans: Challan[] }) {
@@ -154,7 +178,8 @@ export default function Invoices({ parties, products, challans }: { parties: Par
     const [dateTo, setDateTo] = useState('');
     const [search, setSearch] = useState('');
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
-    const [createOpen, setCreateOpen] = useState(false);
+    const [formOpen, setFormOpen] = useState(false);
+    const [editing, setEditing] = useState<Invoice | null>(null);
     const [viewOpen, setViewOpen] = useState(false);
     const [viewing, setViewing] = useState<Invoice | null>(null);
     const [processing, setProcessing] = useState(false);
@@ -169,6 +194,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
     const [formDueDate, setFormDueDate] = useState('');
     const [formNotes, setFormNotes] = useState('');
     const [formChallanIds, setFormChallanIds] = useState<number[]>([]);
+    const [formChallans, setFormChallans] = useState<Challan[]>(challans);
     const [chalSearch, setChalSearch] = useState('');
 
     const filteredFilterParties = parties.filter((p) =>
@@ -220,7 +246,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         ? products.filter((p) => String(p.party_id) === String(formParty))
         : [];
 
-    const filteredChallans = challans.filter((c) => {
+    const filteredChallans = formChallans.filter((c) => {
         if (!formParty) return false;
         if (String(c.party_id) !== String(formParty)) return false;
         if (formProduct && String(c.product_id) !== String(formProduct)) return false;
@@ -229,15 +255,17 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         return true;
     });
 
-    const handleCreate = async () => {
+    const handleSave = async () => {
         if (!formParty || formChallanIds.length === 0 || !formDate || !formDueDate) {
             toast.error('Fill all required fields and select at least one challan');
             return;
         }
         setProcessing(true);
         try {
-            const res = await fetch('/api/invoices', {
-                method: 'POST',
+            const url = editing ? `/api/invoices/${editing.id}` : '/api/invoices';
+            const method = editing ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+                method,
                 headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 body: JSON.stringify({
                     party_id: parseInt(formParty),
@@ -249,8 +277,9 @@ export default function Invoices({ parties, products, challans }: { parties: Par
             });
             const data = await res.json();
             if (res.ok) {
-                toast.success(data.message || 'Invoice created');
-                setCreateOpen(false);
+                toast.success(data.message || (editing ? 'Invoice updated' : 'Invoice created'));
+                setFormOpen(false);
+                setEditing(null);
                 resetForm();
                 fetchInvoices();
             } else {
@@ -271,7 +300,43 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         setFormDueDate('');
         setFormNotes('');
         setFormChallanIds([]);
+        setFormChallans(challans);
         setChalSearch('');
+    };
+
+    const openEdit = async (id: number) => {
+        try {
+            const res = await fetch(`/api/invoices/${id}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json();
+            const inv = data.data;
+            if (!inv) {
+                toast.error('Failed to load invoice');
+                return;
+            }
+            setEditing(inv);
+            setFormParty(String(inv.party_id ?? ''));
+            setFormProduct('');
+            setFormDate(inv.date ? String(inv.date).slice(0, 10) : '');
+            setFormDueDate(inv.due_date ? String(inv.due_date).slice(0, 10) : '');
+            setFormNotes(inv.notes || '');
+            setFormChallanIds((inv.challans || []).map((c: InvoiceChallan) => c.id));
+            setFormChallans((prev) => {
+                const map = new Map<number, Challan>();
+                prev.forEach((c) => map.set(c.id, c));
+                (inv.challans || []).forEach((c: InvoiceChallan) => {
+                    const shaped = toChallanShape(c);
+                    if (shaped.id) map.set(shaped.id, shaped);
+                });
+                return Array.from(map.values());
+            });
+            setChalSearch('');
+            setFormPartySearch('');
+            setFormOpen(true);
+        } catch {
+            toast.error('Failed to load invoice');
+        }
     };
 
     const handleDelete = async () => {
@@ -308,6 +373,23 @@ export default function Invoices({ parties, products, challans }: { parties: Par
             setViewOpen(true);
         } catch {
             toast.error('Failed to load invoice');
+        }
+    };
+
+    const markPrinted = async (ids: number[]) => {
+        if (ids.length === 0) return;
+        try {
+            await Promise.all(
+                ids.map((id) =>
+                    fetch(`/api/invoices/${id}/mark-printed`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    })
+                )
+            );
+            fetchInvoices();
+        } catch {
+            toast.error('Failed to update print status');
         }
     };
 
@@ -457,8 +539,8 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 </td>
             </tr>
         </table>
+        <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;margin-top:10px;">Generated by M/S Noor Hotel and Restaurant</div>
     </div>
-    <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;margin-top:12px;">Generated by M/S Noor Hotel and Restaurant</div>
 </body>
 </html>`;
 
@@ -469,6 +551,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 win.focus();
                 win.print();
             }
+            markPrinted([id]);
         } catch {
             toast.error('Failed to load invoice');
         }
@@ -526,8 +609,8 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                             <tr><td style="width:55%;border:none;vertical-align:top;"><strong style="font-size:13px;">Payment Method</strong><br/><table style="border:none;font-size:12px;margin-top:4px;"><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Bank Name:</strong></td><td style="border:none;padding:1px 0;">BRAC BANK</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>A/C Name:</strong></td><td style="border:none;padding:1px 0;">NOOR HOTEL AND RESTAURANT</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Account Number:</strong></td><td style="border:none;padding:1px 0;">2078277570001</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Swift Code:</strong></td><td style="border:none;padding:1px 0;">BRAKBDDH</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;white-space:nowrap;"><strong>Routing No:</strong></td><td style="border:none;padding:1px 0;">060220259</td></tr><tr><td style="border:none;padding:1px 8px 1px 0;">&nbsp;</td><td style="border:none;padding:1px 0;">Court Bazar Sub-Branch</td></tr></table></td>
                                 <td style="width:45%;border:none;text-align:center;vertical-align:top;"><div style="border-top:1px solid #1e293b;width:200px;display:inline-block;"></div><div style="padding-top:6px;"><div style="font-weight:bold;font-size:12px;">Mohammod</div><div style="font-size:11px;">Noor Hotel & Restaurant</div><div style="font-size:11px;">Marketing Manager</div></div></td></tr>
                         </table>
+                        <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;margin-top:10px;">Generated by M/S Noor Hotel and Restaurant</div>
                     </div>
-                    <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:6px;margin-top:12px;">Generated by M/S Noor Hotel and Restaurant</div>
                 </div>`;
             });
             const printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Invoice Batch Print</title><style>@page{size:A4;margin:15mm;}body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:0;font-size:13px;}</style></head><body>${allHtml}</body></html>`;
@@ -538,6 +621,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 win.focus();
                 setTimeout(() => win.print(), 500);
             }
+            markPrinted(selectedIds);
         } catch {
             toast.error('Failed to print invoices');
         }
@@ -588,7 +672,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                             <FileDown className="mr-1.5 size-4" />
                             Export Excel
                         </Button>
-                        <Button onClick={() => setCreateOpen(true)}>
+                        <Button onClick={() => { setEditing(null); setFormOpen(true); }}>
                             <Plus className="mr-1.5 size-4" />
                             New Invoice
                         </Button>
@@ -722,13 +806,14 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Paid</th>
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
+                                    <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Print</th>
                                     <th className="px-4 py-3 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {invoices.length === 0 ? (
                                     <tr>
-                                        <td colSpan={11} className="px-4 py-16 text-center">
+                                        <td colSpan={12} className="px-4 py-16 text-center">
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
                                                 <FileText className="size-8 opacity-40" />
                                                 <p className="text-sm font-medium">No invoices found</p>
@@ -756,6 +841,11 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
+                                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${printBadge[inv.print_status] || 'bg-slate-100 text-slate-600'}`}>
+                                                    {inv.print_status === 'printed' ? 'Printed' : 'Unprinted'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
                                                 <div className="flex items-center justify-center">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
@@ -767,6 +857,10 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                                             <DropdownMenuItem onClick={() => openView(inv.id)} className="text-xs">
                                                                 <Eye className="mr-2 size-3.5" />
                                                                 View
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => openEdit(inv.id)} className="text-xs">
+                                                                <Pencil className="mr-2 size-3.5" />
+                                                                Edit
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => printInvoice(inv.id)} className="text-xs">
                                                                 <Printer className="mr-2 size-3.5" />
@@ -819,13 +913,13 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 </div>
             </div>
 
-            {/* Create Dialog */}
-            <Dialog open={createOpen} onOpenChange={(v) => { setCreateOpen(v); if (!v) resetForm(); }}>
+            {/* Create / Edit Dialog */}
+            <Dialog open={formOpen} onOpenChange={(v) => { setFormOpen(v); if (!v) { resetForm(); setEditing(null); } }}>
                 <DialogContent className="sm:max-w-2xl">
                     <DialogHeader className="space-y-1 border-b border-border pb-4">
                         <DialogTitle className="flex items-center gap-2 text-base">
                             <FileText className="size-4.5 text-muted-foreground" />
-                            New Invoice
+                            {editing ? 'Edit Invoice' : 'New Invoice'}
                         </DialogTitle>
                         <DialogDescription className="text-xs">Fields marked with * are required.</DialogDescription>
                     </DialogHeader>
@@ -981,9 +1075,9 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                         </div>
                     </div>
                     <DialogFooter className="border-t border-border pt-4">
-                        <Button variant="outline" onClick={() => { setCreateOpen(false); resetForm(); }}>Cancel</Button>
-                        <Button disabled={processing} onClick={handleCreate} className="min-w-28">
-                            {processing ? 'Saving…' : 'Create Invoice'}
+                        <Button variant="outline" onClick={() => { setFormOpen(false); resetForm(); setEditing(null); }}>Cancel</Button>
+                        <Button disabled={processing} onClick={handleSave} className="min-w-28">
+                            {processing ? 'Saving…' : editing ? 'Save Changes' : 'Create Invoice'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
