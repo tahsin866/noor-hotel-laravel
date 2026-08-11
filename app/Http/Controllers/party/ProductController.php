@@ -4,10 +4,12 @@ namespace App\Http\Controllers\party;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
@@ -77,6 +79,8 @@ class ProductController extends Controller
             'party_id' => 'nullable|exists:parties,id',
             'customer_po_number' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'reminder_at' => 'nullable|date',
+            'attachment' => 'nullable|file|max:10240',
             'meals' => 'required|array|min:1',
             'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snack,morning_snacks,evening_snacks,hot_meal',
             'meals.*.quantity' => 'required|integer|min:0',
@@ -85,6 +89,10 @@ class ProductController extends Controller
         ]);
 
         $validated['code'] = 'PO-'.str_pad(Product::max('id') + 1, 4, '0', STR_PAD_LEFT);
+
+        if ($request->hasFile('attachment')) {
+            $validated['attachment_path'] = $request->file('attachment')->store('product-attachments', 'public');
+        }
 
         $meals = $validated['meals'];
         unset($validated['meals']);
@@ -101,6 +109,13 @@ class ProductController extends Controller
         $product->party_name = $product->party->party_name ?? null;
         $product->total_ordered = $product->meals->sum('quantity');
         $product->total_delivered = $product->meals->sum('delivered_quantity');
+
+        NotifyAdmins::recordCreated('purchase_order', [
+            'code' => $product->code,
+            'name' => $product->name,
+            'party' => $product->party_name,
+            'amount' => round($product->meals->sum(fn ($m) => $m->quantity * $m->unit_price), 2),
+        ]);
 
         return response()->json([
             'message' => 'PO created successfully.',
@@ -131,6 +146,8 @@ class ProductController extends Controller
             'party_id' => 'nullable|exists:parties,id',
             'customer_po_number' => 'nullable|string|max:255',
             'description' => 'nullable|string',
+            'reminder_at' => 'nullable|date',
+            'attachment' => 'nullable|file|max:10240',
             'meals' => 'required|array|min:1',
             'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snack,morning_snacks,evening_snacks,hot_meal',
             'meals.*.quantity' => 'required|integer|min:0',
@@ -140,6 +157,14 @@ class ProductController extends Controller
 
         $meals = $validated['meals'];
         unset($validated['meals']);
+
+        if ($request->hasFile('attachment')) {
+            $this->deleteAttachment($product);
+            $validated['attachment_path'] = $request->file('attachment')->store('product-attachments', 'public');
+        } elseif ($request->boolean('attachment_remove')) {
+            $this->deleteAttachment($product);
+            $validated['attachment_path'] = null;
+        }
 
         $product->update($validated);
 
@@ -173,12 +198,20 @@ class ProductController extends Controller
 
     public function destroy(Product $product): JsonResponse
     {
+        $this->deleteAttachment($product);
         $product->meals()->delete();
         $product->delete();
 
         return response()->json([
             'message' => 'PO deleted successfully.',
         ]);
+    }
+
+    private function deleteAttachment(Product $product): void
+    {
+        if ($product->attachment_path) {
+            Storage::disk('public')->delete($product->attachment_path);
+        }
     }
 
     public function print(Request $request, Product $product)

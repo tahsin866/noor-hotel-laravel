@@ -5,6 +5,7 @@ namespace App\Http\Controllers\party;
 use App\Http\Controllers\Controller;
 use App\Models\Challan;
 use App\Models\ProductMeal;
+use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 
@@ -148,6 +149,12 @@ class ChallanController extends Controller
                 'unit_price' => $meal->unit_price ?? 0,
             ]);
         }
+
+        NotifyAdmins::recordCreated('challan', [
+            'challan_number' => $challan->challan_number,
+            'po_number' => $challan->product?->code,
+            'amount' => round($total, 2),
+        ]);
 
         return response()->json(['success' => true, 'message' => 'Challan created']);
     }

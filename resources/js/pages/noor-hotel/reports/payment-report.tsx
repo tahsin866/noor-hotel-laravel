@@ -1,9 +1,4 @@
 import { Head } from '@inertiajs/react';
-import Heading from '@/components/heading';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
 import {
     AlertCircle,
     Banknote,
@@ -29,6 +24,11 @@ import {
     XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
+import Heading from '@/components/heading';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 type Party = { id: number; party_name: string };
 
@@ -58,6 +58,10 @@ type Summary = {
     total_amount: number;
     total_reduce: number;
     chalan_total: number;
+    chalan_pending: number;
+    chalan_dispatched: number;
+    chalan_delivered: number;
+    chalan_cancelled: number;
     paid_total: number;
     due_total: number;
     unpaid_count: number;
@@ -132,8 +136,12 @@ function fmtNum(n: number | string) {
 }
 
 function fmtDate(d: string) {
-    if (!d) return '—';
+    if (!d) {
+return '—';
+}
+
     const [y, m, day] = d.split('-');
+
     return day && m && y ? `${day}/${m}/${y}` : d;
 }
 
@@ -163,20 +171,41 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
 
     const fetchReport = useCallback(async () => {
         setLoading(true);
+
         try {
             const params = new URLSearchParams();
-            if (filter !== 'all') params.set('status', filter);
-            if (method !== 'all') params.set('method', method);
-            if (partyFilter) params.set('party_id', partyFilter);
-            if (search.trim()) params.set('search', search.trim());
-            if (dateFrom) params.set('date_from', dateFrom);
-            if (dateTo) params.set('date_to', dateTo);
+
+            if (filter !== 'all') {
+params.set('status', filter);
+}
+
+            if (method !== 'all') {
+params.set('method', method);
+}
+
+            if (partyFilter) {
+params.set('party_id', partyFilter);
+}
+
+            if (search.trim()) {
+params.set('search', search.trim());
+}
+
+            if (dateFrom) {
+params.set('date_from', dateFrom);
+}
+
+            if (dateTo) {
+params.set('date_to', dateTo);
+}
+
             params.set('page', String(page));
             params.set('per_page', String(perPage));
             const res = await fetch(`/api/reports/payment?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
             const data = await res.json();
+
             if (data.success) {
                 setRows(data.data.rows || []);
                 setSummary(data.data.summary || null);
@@ -211,6 +240,7 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
 
     const buildPageHtml = (chunkRows: Row[], startIndex: number, isLast: boolean) => {
         const body = chunkRows.map((r, idx) => buildRowHtml(r, startIndex + idx)).join('');
+
         return `<table style="${isLast ? '' : 'page-break-after: always;'}">
             <thead>
                 <tr>
@@ -239,40 +269,70 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
         try {
             const all: Row[] = [];
             let currentPage = 1;
+
             while (true) {
                 const params = new URLSearchParams();
-                if (filter !== 'all') params.set('status', filter);
-                if (method !== 'all') params.set('method', method);
-                if (partyFilter) params.set('party_id', partyFilter);
-                if (search.trim()) params.set('search', search.trim());
-                if (dateFrom) params.set('date_from', dateFrom);
-                if (dateTo) params.set('date_to', dateTo);
+
+                if (filter !== 'all') {
+params.set('status', filter);
+}
+
+                if (method !== 'all') {
+params.set('method', method);
+}
+
+                if (partyFilter) {
+params.set('party_id', partyFilter);
+}
+
+                if (search.trim()) {
+params.set('search', search.trim());
+}
+
+                if (dateFrom) {
+params.set('date_from', dateFrom);
+}
+
+                if (dateTo) {
+params.set('date_to', dateTo);
+}
+
                 params.set('page', String(currentPage));
                 params.set('per_page', '1000');
                 const res = await fetch(`/api/reports/payment?${params.toString()}`, {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                 });
                 const data = await res.json();
+
                 if (!data.success) {
                     toast.error(data.message || 'Failed to load report');
+
                     return null;
                 }
+
                 const pageRows: Row[] = data.data.rows || [];
+
                 if (pageRows.length === 0) {
                     break;
                 }
+
                 all.push(...pageRows);
+
                 if (all.length >= (data.data.pagination?.total ?? all.length)) {
                     break;
                 }
+
                 currentPage += 1;
+
                 if (currentPage > 100) {
                     break;
                 }
             }
+
             return all;
         } catch {
             toast.error('Failed to load report data');
+
             return null;
         }
     };
@@ -280,15 +340,20 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
     const printReport = async () => {
         if (!summary) {
             toast.error('No data to print');
+
             return;
         }
+
         const allRows = await fetchAllRows();
+
         if (!allRows || allRows.length === 0) {
             toast.error('No data to print');
+
             return;
         }
 
         const pagesHtml = [];
+
         for (let start = 0; start < allRows.length; start += 10) {
             const chunk = allRows.slice(start, start + 10);
             const isLast = start + 10 >= allRows.length;
@@ -320,6 +385,10 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
                         <div>Total Chalan Amount: <strong>Tk ${fmt$(summary.chalan_total)}</strong></div>
                         <div>Total Paid: <strong>Tk ${fmt$(summary.paid_total)}</strong></div>
                         <div>Balance (Due): <strong>Tk ${fmt$(summary.due_total)}</strong></div>
+                        <div>Pending Challans: <strong>Tk ${fmt$(summary.chalan_pending)}</strong></div>
+                        <div>Dispatched Challans: <strong>Tk ${fmt$(summary.chalan_dispatched)}</strong></div>
+                        <div>Delivered Challans: <strong>Tk ${fmt$(summary.chalan_delivered)}</strong></div>
+                        <div>Cancelled Challans: <strong>Tk ${fmt$(summary.chalan_cancelled)}</strong></div>
                         <div>Total Amount: <strong>Tk ${fmt$(summary.total_amount)}</strong></div>
                         <div>Unpaid Amount: <strong>Tk ${fmt$(summary.unpaid_amount)}</strong></div>
                         <div>Total Reduce: <strong>Tk ${fmt$(summary.total_reduce)}</strong></div>
@@ -368,6 +437,7 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
         </body></html>`;
 
         const win = window.open('', '_blank', 'width=1100,height=600');
+
         if (win) {
             win.document.write(html);
             win.document.close();
@@ -379,11 +449,15 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
     const exportToExcel = async () => {
         if (!summary) {
             toast.error('No data to export');
+
             return;
         }
+
         const allRows = await fetchAllRows();
+
         if (!allRows || allRows.length === 0) {
             toast.error('No data to export');
+
             return;
         }
 
@@ -406,6 +480,10 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
             { Metric: 'Total Amount', Value: summary.total_amount },
             { Metric: 'Total Reduce', Value: summary.total_reduce },
             { Metric: 'Total Chalan Amount', Value: summary.chalan_total },
+            { Metric: 'Pending Challans', Value: summary.chalan_pending },
+            { Metric: 'Dispatched Challans', Value: summary.chalan_dispatched },
+            { Metric: 'Delivered Challans', Value: summary.chalan_delivered },
+            { Metric: 'Cancelled Challans', Value: summary.chalan_cancelled },
             { Metric: 'Total Paid', Value: summary.paid_total },
             { Metric: 'Balance (Due)', Value: summary.due_total },
             { Metric: 'Unpaid Invoices', Value: summary.unpaid_count },
@@ -436,6 +514,7 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
     const windowSize = 5;
     const pagesStart = Math.max(1, pagination.current_page - Math.floor(windowSize / 2));
     const pagesEnd = Math.min(pagination.last_page, pagesStart + windowSize - 1);
+
     for (let p = Math.max(1, pagesEnd - windowSize + 1); p <= pagesEnd; p += 1) {
         pageNumbers.push(p);
     }
@@ -466,7 +545,9 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
                         {statusFilters.map((f) => (
                             <button
                                 key={f.v}
-                                onClick={() => { setFilter(f.v); setPage(1); }}
+                                onClick={() => {
+ setFilter(f.v); setPage(1); 
+}}
                                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${filter === f.v ? 'bg-background text-foreground shadow-sm border border-border' : 'text-muted-foreground hover:text-foreground'}`}
                             >
                                 {f.l}
@@ -475,7 +556,9 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
                     </div>
                     <select
                         value={method}
-                        onChange={(e) => { setMethod(e.target.value); setPage(1); }}
+                        onChange={(e) => {
+ setMethod(e.target.value); setPage(1); 
+}}
                         className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none"
                     >
                         {methodFilters.map((f) => (
@@ -554,7 +637,9 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
                         <Input
                             placeholder="Search invoice, party or reference..."
                             value={search}
-                            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                            onChange={(e) => {
+ setSearch(e.target.value); setPage(1); 
+}}
                             className="h-8 w-56 pl-8 text-xs"
                         />
                     </div>
@@ -562,19 +647,25 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
                         <Input
                             type="date"
                             value={dateFrom}
-                            onChange={(e) => { setDateFrom(e.target.value); setPage(1); }}
+                            onChange={(e) => {
+ setDateFrom(e.target.value); setPage(1); 
+}}
                             className="h-8 w-40 text-xs"
                         />
                         <span className="text-xs text-muted-foreground">to</span>
                         <Input
                             type="date"
                             value={dateTo}
-                            onChange={(e) => { setDateTo(e.target.value); setPage(1); }}
+                            onChange={(e) => {
+ setDateTo(e.target.value); setPage(1); 
+}}
                             className="h-8 w-40 text-xs"
                         />
                     </div>
                     {hasFilters && (
-                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { setFilter('all'); setMethod('all'); setPartyFilter(''); setSearch(''); setDateFrom(''); setDateTo(''); setPage(1); }}>
+                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => {
+ setFilter('all'); setMethod('all'); setPartyFilter(''); setSearch(''); setDateFrom(''); setDateTo(''); setPage(1); 
+}}>
                             <RotateCcw className="mr-1.5 size-3.5" />
                             Reset
                         </Button>
@@ -584,19 +675,59 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
                 {summary && (
                     <>
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            {[
-                                { label: 'Total Chalan Amount', value: `Tk ${fmt$(summary.chalan_total)}`, icon: FileStack, color: 'text-indigo-600' },
-                                { label: 'Total Paid', value: `Tk ${fmt$(summary.paid_total)}`, icon: Banknote, color: 'text-emerald-600' },
-                                { label: 'Balance (Due)', value: `Tk ${fmt$(summary.due_total)}`, icon: Scale, color: 'text-red-600' },
-                            ].map((s) => (
-                                <div key={s.label} className="rounded-lg border border-sidebar-border/70 bg-muted/30 p-4 dark:border-sidebar-border">
-                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                        <s.icon className="size-4" />
-                                        {s.label}
-                                    </div>
-                                    <div className={`mt-1 text-xl font-bold tabular-nums ${s.color}`}>{s.value}</div>
+                            <div className="rounded-lg border border-sidebar-border/70 bg-muted/30 p-4 dark:border-sidebar-border">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <FileStack className="size-4" />
+                                    Total Chalan Amount
                                 </div>
-                            ))}
+                                <div className="mt-1 text-xl font-bold tabular-nums text-indigo-600">Tk {fmt$(summary.chalan_total)}</div>
+                            </div>
+                            <div className="rounded-lg border border-sidebar-border/70 bg-muted/30 p-4 dark:border-sidebar-border">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <Banknote className="size-4" />
+                                    Total Paid
+                                </div>
+                                <div className="mt-1 text-xl font-bold tabular-nums text-emerald-600">Tk {fmt$(summary.paid_total)}</div>
+                            </div>
+                            <div className="rounded-lg border border-sidebar-border/70 bg-muted/30 p-4 dark:border-sidebar-border">
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <Scale className="size-4" />
+                                    Balance (Due)
+                                </div>
+                                <div className="mt-1 text-xl font-bold tabular-nums text-red-600">Tk {fmt$(summary.due_total)}</div>
+                                <div className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="size-1.5 rounded-full bg-amber-400" />
+                                            Pending (not due)
+                                        </span>
+                                        <strong className="tabular-nums">Tk {fmt$(summary.chalan_pending)}</strong>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="size-1.5 rounded-full bg-blue-400" />
+                                            Dispatched
+                                        </span>
+                                        <strong className="tabular-nums">Tk {fmt$(summary.chalan_dispatched)}</strong>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="size-1.5 rounded-full bg-emerald-400" />
+                                            Delivered
+                                        </span>
+                                        <strong className="tabular-nums">Tk {fmt$(summary.chalan_delivered)}</strong>
+                                    </div>
+                                    {Number(summary.chalan_cancelled) > 0 && (
+                                        <div className="flex items-center justify-between gap-2 opacity-60">
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="size-1.5 rounded-full bg-gray-400" />
+                                                Cancelled (excluded)
+                                            </span>
+                                            <strong className="tabular-nums">Tk {fmt$(summary.chalan_cancelled)}</strong>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-9">
                         {[
@@ -658,6 +789,7 @@ export default function PaymentReport({ parties }: { parties: Party[] }) {
                                     rows.map((r) => {
                                         const meta = statusMeta[r.payment_status || ''] || statusMeta.unpaid;
                                         const Icon = meta.icon;
+
                                         return (
                                             <tr key={`${r.is_unpaid ? 'u' : 'p'}-${r.id}`} className={`border-b border-sidebar-border/70 transition-colors last:border-0 hover:bg-muted/30 dark:border-sidebar-border ${r.is_unpaid ? 'bg-rose-50/40 dark:bg-rose-950/20' : ''}`}>
                                                 <td className="px-4 py-3 text-center text-xs tabular-nums">{fmtDate(r.payment_date)}</td>

@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
-import { LayoutGrid, Users, ShoppingCart, FileText, CreditCard, BarChart3, Truck, Shield, Lock, UserCog, ShieldCheck, Inbox } from 'lucide-react';
+import { usePage } from '@inertiajs/react';
+import { LayoutGrid, Users, ShoppingCart, FileText, CreditCard, BarChart3, Truck, Shield, Lock, UserCog, ShieldCheck, Inbox, Bell, Trash2 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -16,7 +17,6 @@ import {
 import { dashboard } from '@/routes';
 import { edit as editSecurity } from '@/routes/security';
 import type { NavItem } from '@/types';
-import { usePage } from '@inertiajs/react';
 
 const mainNavItems: NavItem[] = [
     {
@@ -76,6 +76,16 @@ const mainNavItems: NavItem[] = [
         href: '/emails',
         icon: Inbox,
     },
+    {
+        title: 'Notification',
+        href: '/notifications',
+        icon: Bell,
+    },
+    {
+        title: 'Trash',
+        href: '/trash',
+        icon: Trash2,
+    },
 ];
 
 const adminNavItems: NavItem[] = [
@@ -111,11 +121,18 @@ const footerNavItems: NavItem[] = [
 
 export function AppSidebar() {
     const userPermissions = usePage().props.permissions ?? [];
+    const unreadCount = Number(usePage().props.notification_unread_count ?? 0);
     const isAdmin = userPermissions.includes('manage_users') || userPermissions.includes('manage_roles');
 
-    const visibleMainItems = mainNavItems.filter((item) => {
-        if (!item.permission && !item.permissions) return true;
+    const visibleMainItems = mainNavItems.map((item) =>
+        item.title === 'Notification' && unreadCount > 0 ? { ...item, badge: unreadCount } : item
+    ).filter((item) => {
+        if (!item.permission && !item.permissions) {
+return true;
+}
+
         const required = item.permissions ?? (item.permission ? [item.permission] : []);
+
         return required.some((perm) => userPermissions.includes(perm));
     });
 
@@ -134,7 +151,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={visibleMainItems} />
                 {isAdmin && <NavMain items={adminNavItems} />}
             </SidebarContent>
 

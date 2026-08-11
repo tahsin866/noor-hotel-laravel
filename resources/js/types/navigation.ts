@@ -13,5 +13,6 @@ export type NavItem = {
     isActive?: boolean;
     permission?: string;
     permissions?: string[];
+    badge?: string | number;
     children?: NavItem[];
 };

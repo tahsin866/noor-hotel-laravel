@@ -7,17 +7,27 @@ import {
 
 /* ---------------- dummy data (replace with real props/API data) ---------------- */
 
-const stats = {
+type Stats = {
+    totalParties: number;
+    totalProducts: number;
+    totalChallans: number;
+    deliveredChallans: number;
+    totalInvoices: number;
+    totalRevenue: number;
+    totalPaid: number;
+    totalDue: number;
+};
+
+const defaultStats: Stats = {
     totalParties: 128,
     totalProducts: 46,
     totalChallans: 342,
+    deliveredChallans: 298,
     totalInvoices: 289,
     totalRevenue: 1845000,
     totalPaid: 1510000,
     totalDue: 335000,
 };
-
-const collectionRate = Math.round((stats.totalPaid / stats.totalRevenue) * 100);
 
 const monthly = [
     { month: 'জান', challans: 38, invoices: 30, revenue: 220000 },
@@ -111,7 +121,9 @@ function Legend({ items }: { items: Array<{ name: string; value: number; color: 
 
 /* ---------------- main component ---------------- */
 
-export default function DashboardDemo() {
+export default function DashboardDemo({ stats = defaultStats }: { stats?: Stats }) {
+    const collectionRate = Math.round((stats.totalPaid / stats.totalRevenue) * 100);
+
     return (
         <div className="w-full space-y-6 bg-white p-5 md:p-7">
             {/* KPI row */}

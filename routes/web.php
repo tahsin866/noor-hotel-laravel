@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmailedPurchaseOrdersController;
+use App\Http\Controllers\NotificationsController;
+use App\Http\Controllers\TrashController;
 use App\Http\Controllers\party\PartyController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RoleController;
@@ -132,6 +134,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('report.payment');
 
     Route::get('emails', EmailedPurchaseOrdersController::class)->name('emails');
+
+    Route::get('notifications', [NotificationsController::class, 'index'])->name('notifications');
+    Route::post('notifications/read-all', [NotificationsController::class, 'readAll'])->name('notifications.read-all');
+    Route::post('notifications/{notification}/read', [NotificationsController::class, 'read'])->name('notifications.read');
+    Route::delete('notifications/{notification}', [NotificationsController::class, 'destroy'])->name('notifications.destroy');
+
+    Route::get('trash', [TrashController::class, 'index'])->name('trash');
+    Route::post('trash/{model}/{id}/restore', [TrashController::class, 'restore'])->name('trash.restore');
+    Route::delete('trash/{model}/{id}', [TrashController::class, 'destroy'])->name('trash.destroy');
 
     Route::middleware(['role:super_admin,admin'])->prefix('admin')->name('admin.')->group(function () {
         Route::get('users', [UserController::class, 'index'])->name('users.index');

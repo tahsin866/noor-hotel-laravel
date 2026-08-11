@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\party\StorePartyRequest;
 use App\Http\Requests\party\UpdatePartyRequest;
 use App\Models\Party;
+use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -62,6 +63,10 @@ class PartyController extends Controller
     public function store(StorePartyRequest $request): JsonResponse
     {
         $party = Party::create($request->validated());
+
+        NotifyAdmins::recordCreated('party', [
+            'party_name' => $party->party_name,
+        ]);
 
         return response()->json([
             'message' => 'Party created successfully.',

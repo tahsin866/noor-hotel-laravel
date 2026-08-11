@@ -109,15 +109,20 @@ class PaymentReportController extends Controller
             ->sort(fn ($a, $b) => [($b['payment_date'] ?? ''), $b['id']] <=> [($a['payment_date'] ?? ''), $a['id']])
             ->values();
 
-        $chalanTotal = round((float) Challan::query()
-            ->when($partyId, fn ($q) => $q->whereHas('product', fn ($pq) => $pq->where('party_id', $partyId)))
-            ->sum('total_amount'), 2);
+        $challanQuery = Challan::query()
+            ->when($partyId, fn ($q) => $q->whereHas('product', fn ($pq) => $pq->where('party_id', $partyId)));
+
+        $chalanPending = round((float) (clone $challanQuery)->where('status', 'pending')->sum('total_amount'), 2);
+        $chalanDispatched = round((float) (clone $challanQuery)->where('status', 'dispatched')->sum('total_amount'), 2);
+        $chalanDelivered = round((float) (clone $challanQuery)->where('status', 'delivered')->sum('total_amount'), 2);
+        $chalanCancelled = round((float) (clone $challanQuery)->where('status', 'cancelled')->sum('total_amount'), 2);
+        $chalanTotal = round($chalanPending + $chalanDispatched + $chalanDelivered + $chalanCancelled, 2);
 
         $paidTotal = round((float) PaymentHistory::query()
             ->when($partyId, fn ($q) => $q->whereHas('invoice', fn ($iq) => $iq->where('party_id', $partyId)))
             ->sum('amount'), 2);
 
-        $summary = $this->buildSummary($paymentRows, $unpaidRows, $chalanTotal, $paidTotal);
+        $summary = $this->buildSummary($paymentRows, $unpaidRows, $chalanTotal, $paidTotal, $chalanPending, $chalanDispatched, $chalanDelivered, $chalanCancelled);
 
         $currentPage = max(1, (int) $request->get('page', 1));
         $pageItems = $allRows->forPage($currentPage, $perPage)->values();
@@ -188,7 +193,7 @@ class PaymentReportController extends Controller
         ];
     }
 
-    private function buildSummary($payments, $unpaid, float $chalanTotal = 0, float $paidTotal = 0): array
+    private function buildSummary($payments, $unpaid, float $chalanTotal = 0, float $paidTotal = 0, float $chalanPending = 0, float $chalanDispatched = 0, float $chalanDelivered = 0, float $chalanCancelled = 0): array
     {
         $unpaidAmount = round($unpaid->sum('amount'), 2);
         $paymentAmount = round($payments->sum('amount'), 2);
@@ -198,8 +203,12 @@ class PaymentReportController extends Controller
             'total_amount' => $paymentAmount,
             'total_reduce' => round($payments->sum('reduce_amount'), 2),
             'chalan_total' => $chalanTotal,
+            'chalan_pending' => $chalanPending,
+            'chalan_dispatched' => $chalanDispatched,
+            'chalan_delivered' => $chalanDelivered,
+            'chalan_cancelled' => $chalanCancelled,
             'paid_total' => $paidTotal,
-            'due_total' => round($chalanTotal - $paidTotal, 2),
+            'due_total' => round($chalanDispatched + $chalanDelivered - $paidTotal, 2),
             'unpaid_count' => $unpaid->count(),
             'unpaid_amount' => $unpaidAmount,
             'total_receivable' => round($paymentAmount + $unpaidAmount, 2),

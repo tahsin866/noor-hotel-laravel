@@ -41,6 +41,7 @@ Route::post('invoices/{id}/mark-printed', [InvoiceController::class, 'markPrinte
 Route::patch('invoices/{id}/status', [InvoiceController::class, 'updateStatus']);
 Route::get('invoices/{id}/payment-history', [InvoiceController::class, 'paymentHistory']);
 Route::get('payments/report', [InvoiceController::class, 'report']);
+Route::post('payments/bulk', [InvoiceController::class, 'bulkPayment']);
 
 Route::get('reports/purchase', [PurchaseReportController::class, 'index']);
 Route::get('reports/challan', [ChallanReportController::class, 'index']);

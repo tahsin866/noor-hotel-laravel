@@ -18,9 +18,11 @@ class DashboardController extends Controller
         $totalChallans = Challan::count();
         $deliveredChallans = Challan::where('status', 'delivered')->count();
         $totalInvoices = Invoice::count();
-        $totalRevenue = Invoice::sum('total_amount');
+        $deliveredAmount = round((float) Challan::where('status', 'delivered')->sum('total_amount'), 2);
+        $dispatchedAmount = round((float) Challan::where('status', 'dispatched')->sum('total_amount'), 2);
+        $totalRevenue = round($deliveredAmount + $dispatchedAmount, 2);
         $totalPaid = Invoice::sum('amount_paid');
-        $totalDue = Invoice::sum('amount_due');
+        $totalDue = round($totalRevenue - $totalPaid, 2);
 
         $challanByStatus = Challan::select('status', DB::raw('count(*) as total'))
             ->groupBy('status')

@@ -59,6 +59,10 @@ test('payment report endpoint returns success with data', function () {
                     'total_amount',
                     'total_reduce',
                     'chalan_total',
+                    'chalan_pending',
+                    'chalan_dispatched',
+                    'chalan_delivered',
+                    'chalan_cancelled',
                     'paid_total',
                     'due_total',
                     'unpaid_count',
@@ -367,14 +371,17 @@ test('payment report summary calculates chalan paid and due totals', function ()
     Challan::factory()->create([
         'product_id' => $product->id,
         'total_amount' => 4000,
+        'status' => 'delivered',
     ]);
     Challan::factory()->create([
         'product_id' => $product->id,
         'total_amount' => 6000,
+        'status' => 'delivered',
     ]);
     Challan::factory()->create([
         'product_id' => $otherProduct->id,
         'total_amount' => 9999,
+        'status' => 'delivered',
     ]);
     createReportPayment(
         paymentData: ['amount' => 2500],
@@ -387,6 +394,10 @@ test('payment report summary calculates chalan paid and due totals', function ()
     $summary = $response->json('data.summary');
 
     expect($summary['chalan_total'])->toBe(19999);
+    expect($summary['chalan_delivered'])->toBe(19999);
+    expect($summary['chalan_pending'])->toBe(0);
+    expect($summary['chalan_dispatched'])->toBe(0);
+    expect($summary['chalan_cancelled'])->toBe(0);
     expect($summary['paid_total'])->toBe(2500);
     expect($summary['due_total'])->toBe(17499);
 
@@ -395,8 +406,31 @@ test('payment report summary calculates chalan paid and due totals', function ()
     $filteredSummary = $filtered->json('data.summary');
 
     expect($filteredSummary['chalan_total'])->toBe(10000);
+    expect($filteredSummary['chalan_delivered'])->toBe(10000);
     expect($filteredSummary['paid_total'])->toBe(2500);
     expect($filteredSummary['due_total'])->toBe(7500);
+});
+
+test('payment report splits challan totals by status and excludes cancelled from due', function () {
+    $party = Party::factory()->create();
+    $product = Product::factory()->create(['party_id' => $party->id]);
+
+    Challan::factory()->create(['product_id' => $product->id, 'status' => 'pending', 'total_amount' => 1000]);
+    Challan::factory()->create(['product_id' => $product->id, 'status' => 'dispatched', 'total_amount' => 2000]);
+    Challan::factory()->create(['product_id' => $product->id, 'status' => 'delivered', 'total_amount' => 3000]);
+    Challan::factory()->create(['product_id' => $product->id, 'status' => 'cancelled', 'total_amount' => 4000]);
+
+    $response = $this->get("/api/reports/payment?party_id={$party->id}");
+
+    $response->assertOk();
+    $summary = $response->json('data.summary');
+
+    expect($summary['chalan_pending'])->toBe(1000);
+    expect($summary['chalan_dispatched'])->toBe(2000);
+    expect($summary['chalan_delivered'])->toBe(3000);
+    expect($summary['chalan_cancelled'])->toBe(4000);
+    expect($summary['chalan_total'])->toBe(10000);
+    expect($summary['due_total'])->toBe(5000);
 });
 
 test('payment report paginates and honors per_page', function () {

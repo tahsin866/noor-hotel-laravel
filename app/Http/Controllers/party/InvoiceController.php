@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Challan;
 use App\Models\Invoice;
 use App\Models\PaymentHistory;
+use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ class InvoiceController extends Controller
         $dateTo = $request->get('date_to');
         $search = $request->get('search');
 
-        $query = Invoice::with(['party', 'items.product', 'paymentHistory'])
+        $query = Invoice::with(['party', 'items.product', 'paymentHistory', 'challans'])
             ->orderByDesc('created_at');
 
         if ($status) {
@@ -75,6 +76,7 @@ class InvoiceController extends Controller
                     ->map(fn ($p) => Storage::disk('public')->url($p->attachment))
                     ->values()
                     ->all(),
+                'challan_ids' => $item->challans->pluck('id')->all(),
                 'status' => $item->status,
                 'print_status' => $item->print_status,
                 'created_at' => $item->created_at,
@@ -250,6 +252,12 @@ class InvoiceController extends Controller
 
         $invoice->challans()->attach($challanIds);
 
+        NotifyAdmins::recordCreated('invoice', [
+            'invoice_number' => $invoice->invoice_number,
+            'party' => $invoice->party?->party_name,
+            'amount' => round($invoice->total_amount, 2),
+        ]);
+
         return response()->json(['success' => true, 'message' => 'Invoice created']);
     }
 
@@ -423,6 +431,12 @@ class InvoiceController extends Controller
                 'reference_number' => $request->reference_number,
                 'notes' => $request->notes,
             ], $commonFields));
+
+            NotifyAdmins::recordCreated('payment', [
+                'invoice_number' => $invoice->invoice_number,
+                'party' => $invoice->party?->party_name,
+                'amount' => round($paymentAmount, 2),
+            ]);
         } elseif ($status === 'partial') {
             $paymentAmount = (float) ($request->amount_paid ?? 0);
             if ($paymentAmount <= 0) {
@@ -450,6 +464,12 @@ class InvoiceController extends Controller
                 'reference_number' => $request->reference_number,
                 'notes' => $request->notes,
             ], $commonFields));
+
+            NotifyAdmins::recordCreated('payment', [
+                'invoice_number' => $invoice->invoice_number,
+                'party' => $invoice->party?->party_name,
+                'amount' => round($paymentAmount, 2),
+            ]);
         } elseif ($status === 'pending') {
             $amountPaid = 0;
             $amountDue = (float) $invoice->total_amount;
@@ -462,6 +482,99 @@ class InvoiceController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Payment status updated']);
+    }
+
+    public function bulkPayment(Request $request)
+    {
+        $request->validate([
+            'invoice_ids' => 'required|array|min:1',
+            'invoice_ids.*' => 'integer|exists:invoices,id',
+            'payment_method' => 'nullable|string',
+            'reference_number' => 'nullable|string',
+            'payment_date' => 'nullable|date',
+            'notes' => 'nullable|string',
+            'payment_status' => 'nullable|string|in:partial,paid,due',
+            'customer_bank_name' => 'nullable|string',
+            'user_bank_name' => 'nullable|string',
+            'attachment' => 'nullable|file|max:10240',
+            'reduce_amount' => 'nullable|numeric|min:0',
+            'reduce_note' => 'nullable|string',
+        ]);
+
+        $invoiceIds = array_unique($request->invoice_ids);
+        $invoices = Invoice::whereIn('id', $invoiceIds)->get();
+
+        $payable = $invoices->filter(fn ($inv) => (float) $inv->amount_due > 0)->values();
+
+        if ($payable->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'Selected invoices have no outstanding balance'], 422);
+        }
+
+        $totalDue = $payable->sum(fn ($inv) => (float) $inv->amount_due);
+        $reduceTotal = min((float) ($request->reduce_amount ?? 0), $totalDue);
+        $lastIndex = $payable->count() - 1;
+
+        $attachmentPath = null;
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('payment-attachments', 'public');
+        }
+
+        $commonFields = [
+            'payment_date' => $request->payment_date ?? now()->format('Y-m-d'),
+            'payment_method' => $request->payment_method,
+            'reference_number' => $request->reference_number,
+            'notes' => $request->notes,
+            'payment_status' => $request->payment_status,
+            'customer_bank_name' => $request->customer_bank_name,
+            'user_bank_name' => $request->user_bank_name,
+            'attachment' => $attachmentPath,
+            'reduce_note' => $request->reduce_note,
+        ];
+
+        $processed = 0;
+        $targetStatus = $request->payment_status === 'partial' ? 'partial' : 'paid';
+
+        foreach ($payable as $index => $invoice) {
+            $due = (float) $invoice->amount_due;
+
+            if ($reduceTotal > 0) {
+                $reduceShare = $index === $lastIndex
+                    ? round($reduceTotal, 2)
+                    : round(($due / $totalDue) * $reduceTotal, 2);
+                $reduceTotal = round($reduceTotal - $reduceShare, 2);
+            } else {
+                $reduceShare = 0;
+            }
+
+            $paymentAmount = round(max(0, $due - $reduceShare), 2);
+            $amountPaid = round((float) $invoice->amount_paid + $paymentAmount, 2);
+            $amountDue = round(max(0, (float) $invoice->total_amount - $amountPaid), 2);
+
+            PaymentHistory::create(array_merge([
+                'invoice_id' => $invoice->id,
+                'amount' => $paymentAmount,
+                'reduce_amount' => $reduceShare > 0 ? $reduceShare : null,
+            ], $commonFields));
+
+            NotifyAdmins::recordCreated('payment', [
+                'invoice_number' => $invoice->invoice_number,
+                'party' => $invoice->party?->party_name,
+                'amount' => round($paymentAmount, 2),
+            ]);
+
+            $invoice->update([
+                'status' => $targetStatus,
+                'amount_paid' => $amountPaid,
+                'amount_due' => $amountDue,
+            ]);
+
+            $processed++;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment recorded for '.$processed.' invoice'.($processed === 1 ? '' : 's'),
+        ]);
     }
 
     public function paymentHistory($id)

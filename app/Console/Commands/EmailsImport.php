@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\EmailedPurchaseOrder;
-use App\Models\User;
 use App\Notifications\NewEmailImport;
+use App\Support\NotifyAdmins;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -78,9 +78,7 @@ class EmailsImport extends Command
 
         $this->info("Stored: {$subject}");
 
-        User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->orWhereHas('roles', fn ($q) => $q->where('name', 'super_admin'))->each(
-            fn (User $user) => $user->notify(new NewEmailImport($record))
-        );
+        NotifyAdmins::notify(new NewEmailImport($record));
 
         $message->setFlag('SEEN');
     }
