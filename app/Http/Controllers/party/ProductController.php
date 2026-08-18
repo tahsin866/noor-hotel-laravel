@@ -28,6 +28,15 @@ class ProductController extends Controller
         $query->withSum('meals as total_ordered', 'quantity')
             ->withSum('meals as total_delivered', 'delivered_quantity');
 
+        $query->withCount([
+            'challans as challans_count' => function ($q) {
+                $q->where('status', '!=', 'cancelled');
+            },
+            'challans as invoiced_challans_count' => function ($q) {
+                $q->whereHas('invoices');
+            },
+        ]);
+
         if ($partyId) {
             $query->where('products.party_id', $partyId);
         }
@@ -43,18 +52,18 @@ class ProductController extends Controller
 
         if ($status && $status !== 'all') {
             if ($status === 'delivered') {
-                $query->whereDoesntHave('meals', function ($q) {
-                    $q->whereColumn('delivered_quantity', '<', 'quantity');
-                })->whereHas('meals');
-            } elseif ($status === 'partial') {
-                $query->whereHas('meals', function ($q) {
-                    $q->where('delivered_quantity', '>', 0);
-                })->whereHas('meals', function ($q) {
-                    $q->whereColumn('delivered_quantity', '<', 'quantity');
+                $query->whereHas('challans', function ($q) {
+                    $q->whereHas('invoices');
+                });
+            } elseif ($status === 'waiting') {
+                $query->whereHas('challans', function ($q) {
+                    $q->where('status', '!=', 'cancelled');
+                })->whereDoesntHave('challans', function ($q) {
+                    $q->whereHas('invoices');
                 });
             } elseif ($status === 'pending') {
-                $query->whereDoesntHave('meals', function ($q) {
-                    $q->where('delivered_quantity', '>', 0);
+                $query->whereDoesntHave('challans', function ($q) {
+                    $q->where('status', '!=', 'cancelled');
                 });
             }
         }

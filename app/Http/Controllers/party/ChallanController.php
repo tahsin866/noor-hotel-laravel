@@ -11,6 +11,21 @@ use Illuminate\Http\Request;
 
 class ChallanController extends Controller
 {
+    private function syncLinkedInvoices(Challan $challan): void
+    {
+        $invoices = $challan->invoices()->get();
+
+        if ($invoices->isEmpty()) {
+            return;
+        }
+
+        $invoiceController = app(InvoiceController::class);
+
+        foreach ($invoices as $invoice) {
+            $invoiceController->rebuildFromChallans($invoice);
+        }
+    }
+
     public function index(Request $request)
     {
         $page = $request->get('page', 1);
@@ -107,6 +122,7 @@ class ChallanController extends Controller
                 'address' => $challan->address,
                 'notes' => $challan->notes,
                 'total_amount' => $challan->total_amount,
+                'total_qty' => $challan->items->sum('quantity'),
                 'status' => $challan->status,
                 'items' => $items,
             ],
@@ -212,12 +228,24 @@ class ChallanController extends Controller
             }
         }
 
+        $this->syncLinkedInvoices($challan);
+
         return response()->json(['success' => true, 'message' => 'Challan updated']);
     }
 
     public function destroy($id)
     {
         $challan = Challan::findOrFail($id);
+        $invoices = $challan->invoices()->get();
+
+        foreach ($invoices as $invoice) {
+            if ($invoice->challans()->count() <= 1) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot delete challan {$challan->challan_number}: invoice {$invoice->invoice_number} contains only this challan.",
+                ], 422);
+            }
+        }
 
         if ($challan->status === 'dispatched') {
             foreach ($challan->items as $item) {
@@ -228,6 +256,13 @@ class ChallanController extends Controller
 
         $challan->items()->delete();
         $challan->delete();
+
+        $invoiceController = app(InvoiceController::class);
+
+        foreach ($invoices as $invoice) {
+            $invoice->challans()->detach($challan->id);
+            $invoiceController->rebuildFromChallans($invoice);
+        }
 
         return response()->json(['success' => true, 'message' => 'Challan deleted']);
     }
@@ -240,17 +275,48 @@ class ChallanController extends Controller
         $previousStatus = $challan->status;
         $newStatus = $request->status;
 
+        if ($newStatus === 'cancelled' && $challan->invoices()->exists()) {
+            $invoices = $challan->invoices()->get();
+
+            foreach ($invoices as $invoice) {
+                if ($invoice->challans()->count() <= 1) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Cannot cancel challan {$challan->challan_number}: invoice {$invoice->invoice_number} contains only this challan.",
+                    ], 422);
+                }
+            }
+
+            if (in_array($previousStatus, ['dispatched', 'delivered'], true)) {
+                foreach ($challan->items as $item) {
+                    ProductMeal::where('id', $item->product_meal_id)
+                        ->decrement('delivered_quantity', $item->quantity);
+                }
+            }
+
+            $challan->update(['status' => $newStatus]);
+
+            $invoiceController = app(InvoiceController::class);
+
+            foreach ($invoices as $invoice) {
+                $invoice->challans()->detach($challan->id);
+                $invoiceController->rebuildFromChallans($invoice);
+            }
+
+            return response()->json(['success' => true, 'message' => 'Challan status updated']);
+        }
+
         $challan->update(['status' => $newStatus]);
 
-        $wasDispatched = $previousStatus === 'dispatched';
-        $isNowDispatched = $newStatus === 'dispatched';
+        $wasCounted = in_array($previousStatus, ['dispatched', 'delivered'], true);
+        $willBeCounted = in_array($newStatus, ['dispatched', 'delivered'], true);
 
-        if (! $wasDispatched && $isNowDispatched) {
+        if (! $wasCounted && $willBeCounted) {
             foreach ($challan->items as $item) {
                 ProductMeal::where('id', $item->product_meal_id)
                     ->increment('delivered_quantity', $item->quantity);
             }
-        } elseif ($wasDispatched && ! $isNowDispatched && $newStatus !== 'delivered') {
+        } elseif ($wasCounted && ! $willBeCounted) {
             foreach ($challan->items as $item) {
                 ProductMeal::where('id', $item->product_meal_id)
                     ->decrement('delivered_quantity', $item->quantity);

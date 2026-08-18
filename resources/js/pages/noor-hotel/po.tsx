@@ -84,6 +84,8 @@ type Product = {
     total_ordered: number;
     total_delivered: number;
     meals_subtotal?: number;
+    challans_count?: number;
+    invoiced_challans_count?: number;
 };
 
 type MealRow = {
@@ -106,7 +108,7 @@ const mealLabels: Record<string, string> = {
     breakfast: 'Breakfast',
     lunch: 'Lunch',
     dinner: 'Dinner',
-    snack: 'Snacks',
+    snacks: 'Snacks',
     morning_snacks: 'Morning Snacks',
     evening_snacks: 'Evening Snacks',
     hot_meal: 'Hot Meal',
@@ -116,7 +118,7 @@ const mealBadge: Record<string, string> = {
     breakfast: 'bg-amber-100 text-amber-700',
     lunch: 'bg-green-100 text-green-700',
     dinner: 'bg-indigo-100 text-indigo-700',
-    snack: 'bg-pink-100 text-pink-700',
+    snacks: 'bg-pink-100 text-pink-700',
     morning_snacks: 'bg-orange-100 text-orange-700',
     evening_snacks: 'bg-violet-100 text-violet-700',
     hot_meal: 'bg-red-100 text-red-700',
@@ -189,20 +191,29 @@ const reminderStatus = (
     now: number,
 ): { label: string; className: string } => {
     if (product.reminder_notified_at) {
-        return { label: 'Notified', className: 'border-slate-200 bg-slate-50 text-slate-600' };
+        return {
+            label: 'Notified',
+            className: 'border-slate-200 bg-slate-50 text-slate-600',
+        };
     }
 
     const due = new Date(product.reminder_at as string).getTime() <= now;
 
     return due
-        ? { label: 'Overdue', className: 'border-red-200 bg-red-50 text-red-700' }
-        : { label: formatDateTime(product.reminder_at), className: 'border-blue-200 bg-blue-50 text-blue-700' };
+        ? {
+              label: 'Overdue',
+              className: 'border-red-200 bg-red-50 text-red-700',
+          }
+        : {
+              label: formatDateTime(product.reminder_at),
+              className: 'border-blue-200 bg-blue-50 text-blue-700',
+          };
 };
 
 const statusFilters = [
     { v: 'all', l: 'All' },
-    { v: 'pending', l: 'Pending' },
-    { v: 'partial', l: 'Partial' },
+    { v: 'pending', l: 'Waiting for Challan' },
+    { v: 'waiting', l: 'Waiting for Invoice' },
     { v: 'delivered', l: 'Delivered' },
 ];
 
@@ -267,107 +278,118 @@ function MealFormFieldsInner({
                 </Button>
             </div>
             <div className="space-y-2 rounded-lg border border-border">
-                {meals.map((m, idx) => (
-                    <div
-                        key={idx}
-                        className={`space-y-2 p-3 ${idx !== 0 ? 'border-t border-border' : ''}`}
-                    >
-                        <div className="flex items-center gap-2">
-                            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-semibold text-muted-foreground tabular-nums">
-                                {idx + 1}
-                            </span>
-                            <div className="w-32 shrink-0">
-                                <Select
-                                    value={m.meal_type}
-                                    onValueChange={(v) =>
-                                        updateMeal(idx, 'meal_type', v)
+                {meals.length === 0 ? (
+                    <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+                        No order items yet. Click &quot;Add Item&quot; to add
+                        one.
+                    </p>
+                ) : (
+                    meals.map((m, idx) => (
+                        <div
+                            key={idx}
+                            className={`space-y-2 p-3 ${idx !== 0 ? 'border-t border-border' : ''}`}
+                        >
+                            <div className="flex items-center gap-2">
+                                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-[11px] font-semibold text-muted-foreground tabular-nums">
+                                    {idx + 1}
+                                </span>
+                                <div className="w-32 shrink-0">
+                                    <Select
+                                        value={m.meal_type}
+                                        onValueChange={(v) =>
+                                            updateMeal(idx, 'meal_type', v)
+                                        }
+                                    >
+                                        <SelectTrigger className="h-8 text-xs">
+                                            <SelectValue placeholder="Select meal" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="breakfast">
+                                                Breakfast
+                                            </SelectItem>
+                                            <SelectItem value="lunch">
+                                                Lunch
+                                            </SelectItem>
+                                            <SelectItem value="dinner">
+                                                Dinner
+                                            </SelectItem>
+                                            <SelectItem value="snacks">
+                                                Snacks
+                                            </SelectItem>
+                                            <SelectItem value="morning_snacks">
+                                                Morning Snacks
+                                            </SelectItem>
+                                            <SelectItem value="evening_snacks">
+                                                Evening Snacks
+                                            </SelectItem>
+                                            <SelectItem value="hot_meal">
+                                                Hot Meal
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Input
+                                    type="number"
+                                    className="h-8 text-xs"
+                                    placeholder="Qty"
+                                    value={m.quantity || ''}
+                                    onChange={(e) =>
+                                        updateMeal(
+                                            idx,
+                                            'quantity',
+                                            parseInt(e.target.value) || 0,
+                                        )
                                     }
+                                    onWheel={(e) =>
+                                        (e.target as HTMLInputElement).blur()
+                                    }
+                                />
+                                <Input
+                                    type="number"
+                                    className="h-8 text-xs"
+                                    placeholder="Unit Price"
+                                    step="0.01"
+                                    value={m.unit_price || ''}
+                                    onChange={(e) =>
+                                        updateMeal(
+                                            idx,
+                                            'unit_price',
+                                            parseFloat(e.target.value) || 0,
+                                        )
+                                    }
+                                    onWheel={(e) =>
+                                        (e.target as HTMLInputElement).blur()
+                                    }
+                                />
+                                <span className="w-20 shrink-0 text-right text-xs font-semibold tabular-nums">
+                                    Tk {(m.quantity * m.unit_price).toFixed(2)}
+                                </span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+                                    onClick={() => removeMealRow(idx)}
                                 >
-                                    <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="breakfast">
-                                            Breakfast
-                                        </SelectItem>
-                                        <SelectItem value="lunch">
-                                            Lunch
-                                        </SelectItem>
-                                        <SelectItem value="dinner">
-                                            Dinner
-                                        </SelectItem>
-                                        <SelectItem value="snack">
-                                            Snacks
-                                        </SelectItem>
-                                        <SelectItem value="morning_snacks">
-                                            Morning Snacks
-                                        </SelectItem>
-                                        <SelectItem value="evening_snacks">
-                                            Evening Snacks
-                                        </SelectItem>
-                                        <SelectItem value="hot_meal">
-                                            Hot Meal
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
+                                    <X className="size-3.5" />
+                                </Button>
                             </div>
-                            <Input
-                                type="number"
-                                className="h-8 text-xs"
-                                placeholder="Qty"
-                                value={m.quantity || ''}
+                            <textarea
+                                className="ml-8 flex w-[calc(100%-2rem)] rounded-md border border-input bg-transparent px-2 py-1.5 text-xs shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                rows={2}
+                                placeholder="Description (optional)"
+                                value={m.description}
                                 onChange={(e) =>
                                     updateMeal(
                                         idx,
-                                        'quantity',
-                                        parseInt(e.target.value) || 0,
+                                        'description',
+                                        e.target.value,
                                     )
                                 }
-                                onWheel={(e) =>
-                                    (e.target as HTMLInputElement).blur()
-                                }
                             />
-                            <Input
-                                type="number"
-                                className="h-8 text-xs"
-                                placeholder="Unit Price"
-                                step="0.01"
-                                value={m.unit_price || ''}
-                                onChange={(e) =>
-                                    updateMeal(
-                                        idx,
-                                        'unit_price',
-                                        parseFloat(e.target.value) || 0,
-                                    )
-                                }
-                                onWheel={(e) =>
-                                    (e.target as HTMLInputElement).blur()
-                                }
-                            />
-                            <span className="w-20 shrink-0 text-right text-xs font-semibold tabular-nums">
-                                Tk {(m.quantity * m.unit_price).toFixed(2)}
-                            </span>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
-                                onClick={() => removeMealRow(idx)}
-                            >
-                                <X className="size-3.5" />
-                            </Button>
                         </div>
-                        <textarea
-                            className="ml-8 flex w-[calc(100%-2rem)] rounded-md border border-input bg-transparent px-2 py-1.5 text-xs shadow-xs placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                            rows={2}
-                            placeholder="Description (optional)"
-                            value={m.description}
-                            onChange={(e) =>
-                                updateMeal(idx, 'description', e.target.value)
-                            }
-                        />
-                    </div>
-                ))}
+                    ))
+                )}
             </div>
             <div className="space-y-1 rounded-lg border border-border bg-muted/40 p-3">
                 <div className="flex justify-between text-xs text-muted-foreground">
@@ -464,23 +486,13 @@ function ProductForm({
     const addMealRow = useCallback(() => {
         setMeals([
             ...mealsRef.current,
-            { meal_type: 'lunch', quantity: 0, unit_price: 0, description: '' },
+            { meal_type: '', quantity: 0, unit_price: 0, description: '' },
         ]);
     }, [setMeals]);
 
     const removeMealRow = useCallback(
         (idx: number) => {
             const next = mealsRef.current.filter((_, i) => i !== idx);
-
-            if (next.length === 0) {
-                next.push({
-                    meal_type: 'lunch',
-                    quantity: 0,
-                    unit_price: 0,
-                    description: '',
-                });
-            }
-
             setMeals(next);
         },
         [setMeals],
@@ -537,7 +549,7 @@ function ProductForm({
                             />
                             {partyDropdownOpen && (
                                 <>
-                                    <div className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
+                                    <div className="absolute z-50 mt-1 max-h-48 min-w-80 overflow-auto rounded-md border border-border bg-popover p-1 shadow-md">
                                         {filteredParties.length === 0 ? (
                                             <div className="px-2 py-4 text-center text-xs text-muted-foreground">
                                                 No parties found
@@ -547,7 +559,7 @@ function ProductForm({
                                                 <button
                                                     key={p.id}
                                                     type="button"
-                                                    className={`w-full rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent ${partyId === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent ${partyId === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                     onClick={() => {
                                                         setPartyId(
                                                             String(p.id),
@@ -812,9 +824,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
     >(null);
     const [attachmentRemoved, setAttachmentRemoved] = useState(false);
     const attachmentInputRef = useRef<HTMLInputElement>(null);
-    const [meals, setMeals] = useState<MealRow[]>([
-        { meal_type: 'lunch', quantity: 0, unit_price: 0, description: '' },
-    ]);
+    const [meals, setMeals] = useState<MealRow[]>([]);
 
     const filteredParties = parties.filter((p) =>
         p.party_name.toLowerCase().includes(partySearch.toLowerCase()),
@@ -874,9 +884,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             attachmentInputRef.current.value = '';
         }
 
-        setMeals([
-            { meal_type: 'lunch', quantity: 0, unit_price: 0, description: '' },
-        ]);
+        setMeals([]);
         setErrors({});
     };
 
@@ -916,14 +924,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                           unit_price: m.unit_price,
                           description: m.description || '',
                       }))
-                    : [
-                          {
-                              meal_type: 'lunch',
-                              quantity: 0,
-                              unit_price: 0,
-                              description: '',
-                          },
-                      ],
+                    : [],
             );
             setErrors({});
             setEditOpen(true);
@@ -1105,7 +1106,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         const fd = new FormData();
         fd.append('name', name);
         fd.append('unit', unit);
-        fd.append('vat_rate', String(parseFloat(vatRate || '10')));
+        fd.append('vat_rate', String(parseFloat(vatRate || '0')));
 
         if (partyId) {
             fd.append('party_id', partyId);
@@ -1347,6 +1348,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             if (res.ok) {
                 toast.success(data.message || 'Challan created');
                 setChallanOpen(false);
+                fetchProducts();
             } else if (res.status === 422) {
                 setChallanErrors(data.errors || {});
             } else {
@@ -1361,7 +1363,6 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
 
     const getDeliveryStatus = (p: Product) => {
         const ordered = p.total_ordered || 0;
-        const delivered = p.total_delivered || 0;
 
         if (ordered === 0) {
             return {
@@ -1371,7 +1372,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             };
         }
 
-        if (delivered >= ordered) {
+        if ((p.invoiced_challans_count || 0) > 0) {
             return {
                 label: 'Delivered',
                 dot: 'bg-emerald-500',
@@ -1379,16 +1380,16 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             };
         }
 
-        if (delivered > 0) {
+        if ((p.challans_count || 0) > 0) {
             return {
-                label: 'Partial',
+                label: 'Waiting for Invoice',
                 dot: 'bg-amber-500',
                 color: 'bg-amber-50 text-amber-700 border-amber-200',
             };
         }
 
         return {
-            label: 'Pending',
+            label: 'Waiting for Challan',
             dot: 'bg-blue-500',
             color: 'bg-blue-50 text-blue-700 border-blue-200',
         };
@@ -1517,9 +1518,9 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                         <button
                             type="button"
                             onClick={() => setPartyFilterOpen((v) => !v)}
-                            className="flex h-8 w-48 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                            className="flex h-8 w-56 items-center justify-between gap-2 overflow-hidden rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                         >
-                            <span className="whitespace-nowrap">
+                            <span className="truncate">
                                 {partyFilter
                                     ? parties.find(
                                           (p) => p.id === Number(partyFilter),
@@ -1543,7 +1544,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                     <div className="mt-1 max-h-60 overflow-auto">
                                         <button
                                             type="button"
-                                            className={`w-full rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
+                                            className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
                                             onClick={() => {
                                                 setPartyFilter('');
                                                 setPartyFilterOpen(false);
@@ -1562,7 +1563,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                 <button
                                                     key={p.id}
                                                     type="button"
-                                                    className={`w-full rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                     onClick={() => {
                                                         setPartyFilter(
                                                             String(p.id),
@@ -1773,7 +1774,12 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                             className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium ${reminderStatus(p, now).className}`}
                                                         >
                                                             <CalendarClock className="size-3" />
-                                                            {reminderStatus(p, now).label}
+                                                            {
+                                                                reminderStatus(
+                                                                    p,
+                                                                    now,
+                                                                ).label
+                                                            }
                                                         </span>
                                                     ) : (
                                                         <span className="text-muted-foreground/40">

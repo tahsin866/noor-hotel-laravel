@@ -22,7 +22,7 @@ class EmailsImport extends Command
         $client->connect();
 
         $folder = $client->getFolder('INBOX');
-        $messages = $folder->query()->unseen()->limit(10)->get();
+        $messages = $folder->query()->unseen()->limit(50)->get();
 
         if ($messages->isEmpty()) {
             $this->info('No unseen emails found.');

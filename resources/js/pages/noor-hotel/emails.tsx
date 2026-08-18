@@ -17,6 +17,8 @@ type EmailRecord = {
     from_email: string;
     from_name: string | null;
     subject: string;
+    body: string | null;
+    html_body: string | null;
     email_date: string;
     type: string;
     status: string;
@@ -210,8 +212,8 @@ export default function EmailedPurchaseOrders({
             </div>
 
             <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelected(null); }}>
-                <DialogContent className="sm:max-w-xl">
-                    <DialogHeader className="space-y-1 border-b border-border pb-4">
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+                    <DialogHeader className="space-y-1 border-b border-border pb-4 shrink-0">
                         <DialogTitle className="flex items-center gap-2 text-base">
                             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${typeColors[selected?.type || 'general'] || 'bg-slate-100 text-slate-600'}`}>
                                 {selected?.type === 'purchase_order' ? 'PO' : selected?.type === 'deadline' ? 'Deadline' : 'General'}
@@ -223,7 +225,7 @@ export default function EmailedPurchaseOrders({
                         )}
                     </DialogHeader>
                     {selected && (
-                        <div className="space-y-3 py-2 text-sm">
+                        <div className="space-y-3 py-2 text-sm overflow-y-auto flex-1 min-h-0">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <span className="text-[10px] font-semibold uppercase text-muted-foreground">From</span>
@@ -277,6 +279,21 @@ export default function EmailedPurchaseOrders({
                                         {selected.status}
                                     </span>
                                 </p>
+                            </div>
+                            <div className="pt-2 border-t border-border">
+                                <span className="text-[10px] font-semibold uppercase text-muted-foreground">Email Body</span>
+                                {selected.html_body ? (
+                                    <div
+                                        className="mt-2 rounded-lg border border-border bg-muted/30 p-3 text-xs overflow-auto max-h-64 [&_img]:max-w-full [&_img]:h-auto"
+                                        dangerouslySetInnerHTML={{ __html: selected.html_body }}
+                                    />
+                                ) : selected.body ? (
+                                    <pre className="mt-2 whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-3 text-xs overflow-auto max-h-64 font-sans">
+                                        {selected.body}
+                                    </pre>
+                                ) : (
+                                    <p className="mt-2 text-xs text-muted-foreground italic">No body content available</p>
+                                )}
                             </div>
                         </div>
                     )}

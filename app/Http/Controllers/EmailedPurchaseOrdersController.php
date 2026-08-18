@@ -29,6 +29,8 @@ class EmailedPurchaseOrdersController extends Controller
             'from_email' => $email->from_email,
             'from_name' => $email->from_name,
             'subject' => $email->subject,
+            'body' => $email->body,
+            'html_body' => $email->html_body,
             'email_date' => $email->email_date?->toIso8601String(),
             'type' => $email->type,
             'status' => $email->status,

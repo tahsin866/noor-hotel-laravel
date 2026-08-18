@@ -10,8 +10,10 @@ import {
     Paperclip,
     Search,
     RotateCcw,
+    X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
@@ -57,7 +59,7 @@ type Invoice = {
 
 const statusFilters = [
     { v: 'all', l: 'All' },
-    { v: 'pending', l: 'Unpaid' },
+    { v: 'pending', l: 'Waiting for Payment' },
     { v: 'paid', l: 'Paid' },
     { v: 'partial', l: 'Partial' },
     { v: 'overdue', l: 'Overdue' },
@@ -71,6 +73,83 @@ const statusColors: Record<string, string> = {
     cancelled: 'bg-slate-100 text-slate-600',
 };
 
+const statusLabel: Record<string, string> = {
+    pending: 'Waiting for Payment',
+    partial: 'Partial',
+    paid: 'Paid',
+    overdue: 'Overdue',
+    cancelled: 'Cancelled',
+};
+
+const BANK_OPTIONS = [
+    'AB Bank PLC',
+    'Agrani Bank PLC',
+    'Al-Arafah Islami Bank PLC',
+    'Ansar-VDP Unnayan Bank',
+    'Bangladesh Commerce Bank PLC',
+    'Bangladesh Development Bank PLC (BDBL)',
+    'Bangladesh Krishi Bank (BKB)',
+    'Bank Alfalah Limited',
+    'Bank Asia PLC',
+    'BASIC Bank Limited',
+    'Bengal Commercial Bank PLC',
+    'BRAC Bank PLC',
+    'Citibank, N.A.',
+    'Citizens Bank PLC',
+    'City Bank PLC',
+    'Commercial Bank of Ceylon PLC',
+    'Community Bank Bangladesh PLC',
+    'Dhaka Bank PLC',
+    'Dutch-Bangla Bank PLC (DBBL)',
+    'Eastern Bank PLC (EBL)',
+    'EXIM Bank PLC',
+    'First Security Islami Bank PLC',
+    'Global Islami Bank PLC',
+    'Grameen Bank',
+    'Habib Bank Limited',
+    'HSBC',
+    'ICB Islamic Bank PLC',
+    'IFIC Bank PLC',
+    'Islami Bank Bangladesh PLC (IBBL)',
+    'Jamuna Bank PLC',
+    'Janata Bank PLC',
+    'Jubilee Bank',
+    'Karmasangsthan Bank',
+    'Meghna Bank PLC',
+    'Mercantile Bank PLC',
+    'Midland Bank PLC',
+    'Modhumoti Bank PLC',
+    'Mutual Trust Bank PLC (MTB)',
+    'National Bank PLC',
+    'National Bank of Pakistan',
+    'National Credit & Commerce (NCC) Bank PLC',
+    'NRB Bank PLC',
+    'NRBC Bank PLC',
+    'ONE Bank PLC',
+    'Palli Sanchay Bank',
+    'Premier Bank PLC',
+    'Prime Bank PLC',
+    'Probashi Kallyan Bank',
+    'Pubali Bank PLC',
+    'Rajshahi Krishi Unnayan Bank (RAKUB)',
+    'Rupali Bank PLC',
+    'Sammilito Islami Bank PLC',
+    'SBAC Bank PLC',
+    'Shahjalal Islami Bank PLC',
+    'Shimanto Bank PLC',
+    'Social Islami Bank PLC (SIBL)',
+    'Sonali Bank PLC',
+    'Southeast Bank PLC',
+    'Standard Bank PLC',
+    'Standard Chartered Bank',
+    'State Bank of India',
+    'Trust Bank PLC',
+    'Union Bank PLC',
+    'United Commercial Bank PLC (UCB)',
+    'Uttara Bank PLC',
+    'Woori Bank',
+];
+
 function fmt$(n: number | string) {
     return Math.round(parseFloat(String(n || 0))).toLocaleString('en-US');
 }
@@ -81,6 +160,172 @@ function fmtDate(d: string) {
     }
 
     return new Date(d).toLocaleDateString('en-GB');
+}
+
+type BankSelectProps = {
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+};
+
+function BankSelect({ value, onChange, placeholder }: BankSelectProps) {
+    const [open, setOpen] = useState(false);
+    const [query, setQuery] = useState('');
+    const [coords, setCoords] = useState<{
+        top: number;
+        left: number;
+        width: number;
+        maxHeight: number;
+    } | null>(null);
+    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+
+    const filtered = BANK_OPTIONS.filter((b) =>
+        b.toLowerCase().includes(query.toLowerCase()),
+    );
+
+    const close = () => {
+        setOpen(false);
+        setQuery('');
+    };
+
+    const toggle = () => {
+        if (open) {
+            close();
+
+            return;
+        }
+
+        if (buttonRef.current) {
+            const host =
+                buttonRef.current.closest<HTMLElement>(
+                    '[data-slot="dialog-content"]',
+                ) || document.body;
+            const r = buttonRef.current.getBoundingClientRect();
+            const hostRect = host.getBoundingClientRect();
+            const maxHeight = Math.max(
+                160,
+                Math.min(320, window.innerHeight - r.bottom - 16),
+            );
+
+            setPortalTarget(host);
+            setCoords({
+                top: r.bottom - hostRect.top + 4,
+                left: r.left - hostRect.left,
+                width: r.width,
+                maxHeight,
+            });
+        }
+
+        setOpen(true);
+    };
+
+    useEffect(() => {
+        if (!open) {
+            return;
+        }
+
+        const handleScroll = () => {
+            setOpen(false);
+            setQuery('');
+        };
+
+        window.addEventListener('scroll', handleScroll, true);
+        window.addEventListener('resize', handleScroll);
+
+        return () => {
+            window.removeEventListener('scroll', handleScroll, true);
+            window.removeEventListener('resize', handleScroll);
+        };
+    }, [open]);
+
+    return (
+        <div className="relative">
+            <button
+                ref={buttonRef}
+                type="button"
+                onClick={toggle}
+                className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+                <span
+                    className={`truncate text-left ${
+                        value ? '' : 'text-muted-foreground'
+                    }`}
+                >
+                    {value || placeholder || 'Select bank'}
+                </span>
+                {value ? (
+                    <span className="flex items-center">
+                        <span
+                            role="button"
+                            aria-label="Clear bank"
+                            className="cursor-pointer rounded-sm p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange('');
+                            }}
+                        >
+                            <X className="size-3.5" />
+                        </span>
+                        <ChevronDown className="ml-0.5 size-4 shrink-0 opacity-50" />
+                    </span>
+                ) : (
+                    <ChevronDown className="size-4 shrink-0 opacity-50" />
+                )}
+            </button>
+            {open &&
+                coords &&
+                portalTarget &&
+                createPortal(
+                    <>
+                        <div className="fixed inset-0 z-[60]" onClick={close} />
+                        <div
+                            style={{
+                                top: coords.top,
+                                left: coords.left,
+                                width: coords.width,
+                                maxHeight: coords.maxHeight,
+                            }}
+                            className="fixed z-[61] flex flex-col overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md"
+                        >
+                            <Input
+                                autoFocus
+                                placeholder="Search bank..."
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                className="h-8 shrink-0 text-sm"
+                            />
+                            <div className="mt-1 min-h-0 flex-1 overflow-auto">
+                                {filtered.length === 0 ? (
+                                    <div className="px-3 py-4 text-center text-sm text-muted-foreground">
+                                        No banks found
+                                    </div>
+                                ) : (
+                                    filtered.map((bank) => (
+                                        <button
+                                            key={bank}
+                                            type="button"
+                                            className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${
+                                                value === bank
+                                                    ? 'bg-accent font-medium'
+                                                    : ''
+                                            }`}
+                                            onClick={() => {
+                                                onChange(bank);
+                                                close();
+                                            }}
+                                        >
+                                            {bank}
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </>,
+                    portalTarget,
+                )}
+        </div>
+    );
 }
 
 function reducePct(amount: number | undefined, total: number | undefined) {
@@ -143,7 +388,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const [bulkCustomerBank, setBulkCustomerBank] = useState('');
     const [bulkUserBank, setBulkUserBank] = useState('');
     const [bulkAttachment, setBulkAttachment] = useState<File | null>(null);
-    const [bulkReduceAmount, setBulkReduceAmount] = useState('');
+    const [bulkPayAmount, setBulkPayAmount] = useState('');
     const [bulkReduceNote, setBulkReduceNote] = useState('');
     const [bulkReduceOtherNote, setBulkReduceOtherNote] = useState('');
     const [bulkProcessing, setBulkProcessing] = useState(false);
@@ -321,7 +566,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
         setBulkCustomerBank('');
         setBulkUserBank('');
         setBulkAttachment(null);
-        setBulkReduceAmount('');
+        setBulkPayAmount('');
         setBulkReduceNote('');
         setBulkReduceOtherNote('');
 
@@ -434,8 +679,12 @@ export default function Payments({ parties }: { parties: Party[] }) {
         (s, i) => s + Number(i.due_amount ?? i.amount_due ?? 0),
         0,
     );
-    const bulkReduceTotal = parseFloat(bulkReduceAmount) || 0;
-    const bulkToPay = Math.max(0, bulkTotalDue - bulkReduceTotal);
+    const bulkPayTotal =
+        bulkPayAmount === ''
+            ? bulkTotalDue
+            : Math.min(parseFloat(bulkPayAmount) || 0, bulkTotalDue);
+    const bulkReduceTotal = Math.max(0, bulkTotalDue - bulkPayTotal);
+    const bulkToPay = bulkPayTotal;
 
     const submitBulkPayment = async () => {
         if (bulkSelected.length === 0) {
@@ -486,8 +735,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
                 formData.append('attachment', bulkAttachment);
             }
 
-            if (bulkReduceAmount) {
-                formData.append('reduce_amount', bulkReduceAmount);
+            if (bulkReduceTotal > 0) {
+                formData.append('reduce_amount', String(bulkReduceTotal));
             }
 
             const finalReduceNote =
@@ -536,7 +785,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
                 <tr><td style="padding:8px 12px;border:1px solid #000;">Amount Paid</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#16a34a;">${fmt$(inv.amount_paid)}</td></tr>
                 <tr><td style="padding:8px 12px;border:1px solid #000;">Amount Due</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#dc2626;">${fmt$(inv.due_amount ?? 0)}</td></tr>
                 <tr><td style="padding:8px 12px;border:1px solid #000;">VAT Reduce (${reducePct(inv.vat_reduce ?? 0, inv.total_amount)}%)</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;color:#dc2626;">${fmt$(inv.vat_reduce ?? 0)}</td></tr>
-                <tr style="background:#f8fafc;"><td style="padding:8px 12px;border:1px solid #000;font-weight:bold;">Status</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;text-transform:capitalize;">${inv.status}</td></tr>
+                <tr style="background:#f8fafc;"><td style="padding:8px 12px;border:1px solid #000;font-weight:bold;">Status</td><td style="padding:8px 12px;border:1px solid #000;text-align:right;text-transform:capitalize;">${statusLabel[inv.status] || inv.status}</td></tr>
             </tbody>
         </table>
         <div style="margin-top:30px;text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;">Generated by M/S Noor Hotel and Restaurant</div>
@@ -560,7 +809,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
             `Paid: Tk ${fmt$(inv.amount_paid)}`,
             `Due: Tk ${fmt$(inv.due_amount ?? 0)}`,
             `VAT Reduce: Tk ${fmt$(inv.vat_reduce ?? 0)} (${reducePct(inv.vat_reduce ?? 0, inv.total_amount)}%)`,
-            `Status: ${inv.status}`,
+            `Status: ${statusLabel[inv.status] || inv.status}`,
         ].join('\n');
 
         if (navigator.share) {
@@ -596,7 +845,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;">Tk ${fmt$(inv.total_amount)}</td>
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#16a34a;">Tk ${fmt$(inv.amount_paid)}</td>
                 <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:right;color:#dc2626;">Tk ${fmt$(inv.vat_reduce ?? 0)} (${reducePct(inv.vat_reduce ?? 0, inv.total_amount)}%)</td>
-                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:center;text-transform:capitalize;">${inv.status === 'pending' ? 'Unpaid' : inv.status}</td>
+                <td style="padding:6px 10px;border:1px solid #000;font-size:11px;text-align:center;text-transform:capitalize;">${statusLabel[inv.status] || inv.status}</td>
             </tr>`;
         });
         const totalPaid = invoices.reduce(
@@ -971,9 +1220,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                                 <span
                                                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColors[inv.status] || 'bg-slate-100 text-slate-600'}`}
                                                 >
-                                                    {inv.status === 'pending'
-                                                        ? 'Unpaid'
-                                                        : inv.status}
+                                                    {statusLabel[inv.status] ||
+                                                        inv.status}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
@@ -1771,38 +2019,76 @@ export default function Payments({ parties }: { parties: Party[] }) {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-1.5">
                                 <Label className="text-xs font-medium text-muted-foreground">
-                                    Reduce Amount
+                                    Payable Amount
                                 </Label>
                                 <Input
                                     type="number"
-                                    value={bulkReduceAmount}
-                                    onChange={(e) =>
-                                        setBulkReduceAmount(e.target.value)
-                                    }
+                                    value={bulkPayAmount}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+
+                                        if (v === '') {
+                                            setBulkPayAmount('');
+                                        } else {
+                                            const n = Number(v);
+
+                                            if (!Number.isNaN(n) && n >= 0) {
+                                                setBulkPayAmount(
+                                                    n > bulkTotalDue
+                                                        ? String(bulkTotalDue)
+                                                        : v,
+                                                );
+                                            }
+                                        }
+                                    }}
                                     min={0}
                                     max={bulkTotalDue}
                                     step="0.01"
-                                    placeholder="0"
+                                    placeholder={
+                                        bulkTotalDue
+                                            ? String(bulkTotalDue)
+                                            : '0'
+                                    }
                                 />
                             </div>
                             <div className="grid gap-1.5">
                                 <Label className="text-xs font-medium text-muted-foreground">
-                                    Reduce Note
+                                    Reduce Amount
                                 </Label>
-                                <select
-                                    value={bulkReduceNote}
-                                    onChange={(e) =>
-                                        setBulkReduceNote(e.target.value)
+                                <Input
+                                    type="number"
+                                    value={
+                                        bulkReduceTotal > 0
+                                            ? String(
+                                                  Math.round(
+                                                      bulkReduceTotal * 100,
+                                                  ) / 100,
+                                              )
+                                            : ''
                                     }
-                                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-                                >
-                                    <option value="">Select reason</option>
-                                    <option value="VAT & Tax">
-                                        VAT &amp; Tax
-                                    </option>
-                                    <option value="Other">Other</option>
-                                </select>
+                                    disabled
+                                    min={0}
+                                    step="0.01"
+                                    placeholder="0"
+                                    className="bg-muted/40 text-muted-foreground"
+                                />
                             </div>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label className="text-xs font-medium text-muted-foreground">
+                                Reduce Note
+                            </Label>
+                            <select
+                                value={bulkReduceNote}
+                                onChange={(e) =>
+                                    setBulkReduceNote(e.target.value)
+                                }
+                                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                            >
+                                <option value="">Select reason</option>
+                                <option value="VAT & Tax">VAT &amp; Tax</option>
+                                <option value="Other">Other</option>
+                            </select>
                         </div>
                         {bulkReduceNote === 'Other' && (
                             <div className="grid gap-1.5">
@@ -1839,26 +2125,20 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                     <Label className="text-xs font-medium text-muted-foreground">
                                         Customer Bank Name
                                     </Label>
-                                    <Input
-                                        type="text"
+                                    <BankSelect
                                         value={bulkCustomerBank}
-                                        onChange={(e) =>
-                                            setBulkCustomerBank(e.target.value)
-                                        }
-                                        placeholder="Customer bank name"
+                                        onChange={setBulkCustomerBank}
+                                        placeholder="Select customer bank"
                                     />
                                 </div>
                                 <div className="grid gap-1.5">
                                     <Label className="text-xs font-medium text-muted-foreground">
                                         Your Bank Name
                                     </Label>
-                                    <Input
-                                        type="text"
+                                    <BankSelect
                                         value={bulkUserBank}
-                                        onChange={(e) =>
-                                            setBulkUserBank(e.target.value)
-                                        }
-                                        placeholder="Your bank name"
+                                        onChange={setBulkUserBank}
+                                        placeholder="Select your bank"
                                     />
                                 </div>
                             </div>

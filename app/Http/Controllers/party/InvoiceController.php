@@ -372,6 +372,46 @@ class InvoiceController extends Controller
         ];
     }
 
+    public function rebuildFromChallans(Invoice $invoice): void
+    {
+        $challans = $invoice->challans()
+            ->with(['product', 'product.party', 'items.productMeal.product'])
+            ->get();
+
+        if ($challans->isEmpty()) {
+            return;
+        }
+
+        $built = $this->buildItemsFromChallans($challans);
+
+        $totalAmount = round($built['total_amount'], 2);
+        $amountPaid = min((float) $invoice->amount_paid, $totalAmount);
+        $amountDue = round(max(0, $totalAmount - $amountPaid), 2);
+
+        if ($amountDue <= 0) {
+            $status = 'paid';
+        } elseif ($amountPaid > 0) {
+            $status = 'partial';
+        } else {
+            $status = 'pending';
+        }
+
+        $invoice->update([
+            'subtotal' => round($built['subtotal'], 2),
+            'total_vat' => round($built['total_vat'], 2),
+            'total_amount' => $totalAmount,
+            'amount_paid' => round($amountPaid, 2),
+            'amount_due' => $amountDue,
+            'status' => $status,
+        ]);
+
+        $invoice->items()->delete();
+
+        foreach ($built['items'] as $item) {
+            $invoice->items()->create($item);
+        }
+    }
+
     public function updateStatus(Request $request, $id)
     {
         $request->validate([

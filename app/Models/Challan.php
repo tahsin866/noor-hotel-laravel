@@ -37,6 +37,11 @@ class Challan extends Model
         return $this->hasMany(ChallanItem::class);
     }
 
+    public function invoices()
+    {
+        return $this->belongsToMany(Invoice::class, 'invoice_challans');
+    }
+
     protected static function boot()
     {
         parent::boot();

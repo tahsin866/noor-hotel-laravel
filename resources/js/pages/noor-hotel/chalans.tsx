@@ -111,14 +111,14 @@ const mealBadge: Record<string, string> = {
     breakfast: 'bg-amber-100 text-amber-700',
     lunch: 'bg-green-100 text-green-700',
     dinner: 'bg-indigo-100 text-indigo-700',
-    snack: 'bg-pink-100 text-pink-700',
+    snacks: 'bg-pink-100 text-pink-700',
 };
 
 const mealLabels: Record<string, string> = {
     breakfast: 'Breakfast',
     lunch: 'Lunch',
     dinner: 'Dinner',
-    snack: 'Snacks',
+    snacks: 'Snacks',
     morning_snacks: 'Morning Snacks',
     evening_snacks: 'Evening Snacks',
     hot_meal: 'Hot Meal',
@@ -134,8 +134,8 @@ function fmt$(n: number | string) {
 
 function fmtDate(d: string) {
     if (!d) {
-return '—';
-}
+        return '—';
+    }
 
     return new Date(d).toLocaleDateString('en-GB');
 }
@@ -248,7 +248,7 @@ function ChallanForm({
                             </button>
                             {partyOpen && (
                                 <>
-                                    <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                    <div className="absolute z-50 mt-1 w-full min-w-80 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
                                         <Input
                                             autoFocus
                                             placeholder="Search party..."
@@ -270,7 +270,7 @@ function ChallanForm({
                                                         <button
                                                             key={p.id}
                                                             type="button"
-                                                            className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${formParty === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                            className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${formParty === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                             onClick={() => {
                                                                 setFormParty(
                                                                     String(
@@ -603,16 +603,16 @@ export default function Challans({
             params.set('limit', String(limit));
 
             if (filter !== 'all') {
-params.set('status', filter);
-}
+                params.set('status', filter);
+            }
 
             if (search) {
-params.set('search', search);
-}
+                params.set('search', search);
+            }
 
             if (partyFilter) {
-params.set('party_id', partyFilter);
-}
+                params.set('party_id', partyFilter);
+            }
 
             const res = await fetch(`/api/challans?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -665,8 +665,8 @@ params.set('party_id', partyFilter);
                 );
 
                 if (remaining <= 0) {
-return null;
-}
+                    return null;
+                }
 
                 return {
                     product_meal_id: m.id,
@@ -704,8 +704,8 @@ return null;
                 );
 
                 if (remaining <= 0) {
-return null;
-}
+                    return null;
+                }
 
                 const existing = existingItems.find(
                     (ei) => ei.product_meal_id === m.id,
@@ -789,8 +789,8 @@ return null;
 
     const handleUpdate = async () => {
         if (!editing || !selectedPo) {
-return;
-}
+            return;
+        }
 
         setProcessing(true);
         setErrors({});
@@ -826,8 +826,8 @@ return;
 
     const handleDelete = async () => {
         if (!deleting) {
-return;
-}
+            return;
+        }
 
         setProcessing(true);
 
@@ -1023,7 +1023,7 @@ return;
                         `<tr>
                                 <td style="width:20px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
                                 <td style="padding:6px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
-                                                        <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">${formatMealType(it.meal_type)}</td>
+                                <td style="width:90px;padding:6px 8px;border:1px solid #000;text-align:left;white-space:normal;word-break:break-word;overflow-wrap:break-word;">${formatMealType(it.meal_type)}</td>
                                 <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
                             </tr>`,
                 )
@@ -1076,7 +1076,7 @@ return;
                     <tr>
                         <th style="width:20px;">SL</th>
                         <th>Product / Item</th>
-                        <th style="width:50px;text-align:left;">Meal</th>
+                        <th style="width:90px;text-align:left;">Meal</th>
                         <th style="width:50px;text-align:center;">Qty</th>
                     </tr>
                 </thead>
@@ -1122,9 +1122,16 @@ return;
     const totalPages = Math.ceil(total / limit);
     const from = total === 0 ? 0 : (page - 1) * limit + 1;
     const to = Math.min(page * limit, total);
-    const filteredProducts = formParty
+    const filteredProducts = (formParty
         ? products.filter((p) => String(p.party_id) === formParty)
-        : products;
+        : products
+    ).filter((p) => {
+        const totalRemaining = (p.meals || []).reduce(
+            (sum, m) => sum + Math.max(0, m.quantity - (m.delivered_quantity || 0)),
+            0,
+        );
+        return totalRemaining > 0;
+    });
 
     const formProps = {
         processing,
@@ -1206,7 +1213,7 @@ return;
                             onClick={() => setPartyFilterOpen((v) => !v)}
                             className="flex h-8 w-56 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                         >
-                            <span className="whitespace-nowrap">
+                            <span className="truncate">
                                 {partyFilter
                                     ? parties.find(
                                           (p) => p.id === Number(partyFilter),
@@ -1217,7 +1224,7 @@ return;
                         </button>
                         {partyFilterOpen && (
                             <>
-                                <div className="absolute z-50 mt-1 w-full min-w-56 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                <div className="absolute z-50 mt-1 w-full min-w-80 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
                                     <Input
                                         autoFocus
                                         placeholder="Search party..."
@@ -1230,7 +1237,7 @@ return;
                                     <div className="mt-1 max-h-60 overflow-auto">
                                         <button
                                             type="button"
-                                            className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
+                                            className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
                                             onClick={() => {
                                                 setPartyFilter('');
                                                 setPartyFilterOpen(false);
@@ -1249,7 +1256,7 @@ return;
                                                 <button
                                                     key={p.id}
                                                     type="button"
-                                                    className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                     onClick={() => {
                                                         setPartyFilter(
                                                             String(p.id),
@@ -1313,8 +1320,8 @@ return;
                                             const c = data.data;
 
                                             if (!c) {
-continue;
-}
+                                                continue;
+                                            }
 
                                             const rows = (c.items || [])
                                                 .filter(
@@ -1326,7 +1333,7 @@ continue;
                                                         `<tr>
                                                         <td style="width:20px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
                                                         <td style="padding:6px 12px;border:1px solid #000;">${it.description || it.product_name}</td>
-                                <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:left;white-space:normal;word-wrap:break-word;overflow-wrap:break-word;">${formatMealType(it.meal_type)}</td>
+                                                        <td style="width:90px;padding:6px 8px;border:1px solid #000;text-align:left;white-space:normal;word-break:break-word;overflow-wrap:break-word;">${formatMealType(it.meal_type)}</td>
                                                         <td style="width:50px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
                                                     </tr>`,
                                                 )
@@ -1359,7 +1366,7 @@ continue;
                                                                     <tr>
                                                                         <th style="width:20px;">SL</th>
                                                                         <th>Product / Item</th>
-                                                                        <th style="width:50px;text-align:left;">Meal</th>
+                                                                        <th style="width:90px;text-align:left;">Meal</th>
                                                                         <th style="width:50px;text-align:center;">Qty</th>
                                                                     </tr>
                                                                 </thead>
@@ -1384,7 +1391,7 @@ continue;
                                                                 </tr>
                                                             </table>
                                                         </div>
-                                                        <div class="footer">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
+                <div class="footer">Generated by M/S Noor Hotel and Restaurant on ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
                                                     </div>
                                                 </div>`;
                                             idx++;
@@ -1945,8 +1952,8 @@ continue;
                     setCreateOpen(v);
 
                     if (!v) {
-resetForm();
-}
+                        resetForm();
+                    }
                 }}
             >
                 <DialogContent className="sm:max-w-2xl">
@@ -2000,14 +2007,34 @@ resetForm();
                         </DialogTitle>
                     </DialogHeader>
                     {viewing && (
-                        <div className="space-y-5">
+                        <div className="max-h-[65vh] space-y-5 overflow-y-auto">
                             <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span className="block text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Challan No
+                                    </span>
+                                    <span className="font-mono text-xs font-semibold">
+                                        {viewing.challan_number || '—'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="block text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Product
+                                    </span>
+                                    <span>{viewing.product_name || '—'}</span>
+                                </div>
                                 <div>
                                     <span className="block text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
                                         PO
                                     </span>
-                                    <span className="font-medium">
-                                        {viewing.po_number || '—'}
+                                    <span>{viewing.po_number || '—'}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Customer PO
+                                    </span>
+                                    <span>
+                                        {viewing.customer_po_number || '—'}
                                     </span>
                                 </div>
                                 <div>
@@ -2021,6 +2048,14 @@ resetForm();
                                         Date
                                     </span>
                                     <span>{fmtDate(viewing.date)}</span>
+                                </div>
+                                <div>
+                                    <span className="block text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Total Qty
+                                    </span>
+                                    <span className="tabular-nums">
+                                        {viewing.total_qty ?? 0}
+                                    </span>
                                 </div>
                                 <div>
                                     <span className="mb-1 block text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -2041,6 +2076,17 @@ resetForm();
                                     </span>
                                     <p className="text-foreground/90">
                                         {viewing.address}
+                                    </p>
+                                </div>
+                            )}
+
+                            {viewing.notes && (
+                                <div className="rounded-lg bg-muted/40 p-3 text-sm">
+                                    <span className="mb-1 block text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Notes
+                                    </span>
+                                    <p className="text-foreground/90">
+                                        {viewing.notes}
                                     </p>
                                 </div>
                             )}
@@ -2077,11 +2123,27 @@ resetForm();
                                                         className="border-t border-border first:border-t-0"
                                                     >
                                                         <td className="px-3 py-2 text-xs">
-                                                            {it.product_name} (
-                                                            {formatMealType(
-                                                                it.meal_type,
-                                                            )}
-                                                            )
+                                                            <span className="font-medium">
+                                                                {
+                                                                    it.product_name
+                                                                }
+                                                            </span>
+                                                            <span
+                                                                className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${mealBadge[it.meal_type] || 'bg-slate-100 text-slate-600'}`}
+                                                            >
+                                                                {formatMealType(
+                                                                    it.meal_type,
+                                                                )}
+                                                            </span>
+                                                            {it.description &&
+                                                                it.description !==
+                                                                    '-' && (
+                                                                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                                                                        {
+                                                                            it.description
+                                                                        }
+                                                                    </span>
+                                                                )}
                                                         </td>
                                                         <td className="px-3 py-2 text-center text-xs tabular-nums">
                                                             {it.quantity}
@@ -2101,8 +2163,11 @@ resetForm();
                                             })}
                                     </tbody>
                                 </table>
-                                <div className="flex items-center justify-end border-t border-border bg-muted/40 px-3 py-2.5">
-                                    <span className="text-sm font-bold tabular-nums">
+                                <div className="flex items-center justify-between border-t border-border bg-muted/40 px-3 py-2.5 text-xs text-muted-foreground">
+                                    <span>
+                                        {viewing.total_qty ?? 0} total qty
+                                    </span>
+                                    <span className="text-sm font-bold text-foreground tabular-nums">
                                         Total: ৳
                                         {fmt$(viewing.total_amount || 0)}
                                     </span>

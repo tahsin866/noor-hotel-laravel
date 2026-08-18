@@ -53,4 +53,9 @@ class Product extends Model
     {
         return $this->hasMany(ProductMeal::class);
     }
+
+    public function challans(): HasMany
+    {
+        return $this->hasMany(Challan::class);
+    }
 }
