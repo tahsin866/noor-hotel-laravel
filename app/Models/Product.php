@@ -58,4 +58,14 @@ class Product extends Model
     {
         return $this->hasMany(Challan::class);
     }
+
+    public static function generateCode(): string
+    {
+        $maxNumber = static::withoutGlobalScopes()
+            ->selectRaw('COALESCE(MAX(CAST(SUBSTRING(code FROM 4) AS INTEGER)), 0) AS max_num')
+            ->where('code', 'like', 'PO-%')
+            ->value('max_num') ?? 0;
+
+        return 'PO-'.str_pad($maxNumber + 1, 4, '0', STR_PAD_LEFT);
+    }
 }
