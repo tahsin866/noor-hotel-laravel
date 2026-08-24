@@ -5,7 +5,6 @@ on:
     branches:
       - main
 
-# GHCR-এ Image Push করার প্রয়োজনীয় পারমিশন
 permissions:
   contents: read
   packages: write
@@ -25,7 +24,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and Push Docker Image
+      # 1. Build & Push Laravel App Image
+      - name: Build and Push App Image
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -33,6 +33,17 @@ jobs:
           no-cache: true
           tags: ghcr.io/${{ github.repository }}:latest
 
+      # 2. Build & Push Nginx Image
+      - name: Build and Push Nginx Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/nginx.Dockerfile
+          push: true
+          no-cache: true
+          tags: ghcr.io/${{ github.repository }}-nginx:latest
+
+      # 3. Deploy to VPS
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -46,7 +57,7 @@ jobs:
             GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml pull
             GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml up -d --remove-orphans
             
-            # Application Optimization & Cache Refresh
+            # Optimization
             docker exec laravel_app php artisan migrate --force
             docker exec laravel_app php artisan optimize:clear
             docker exec laravel_app php artisan config:cache
