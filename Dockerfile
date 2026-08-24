@@ -4,11 +4,19 @@
 FROM node:20-alpine AS frontend
 WORKDIR /var/www
 
-# Package files কপি করে NPM install করা
+# Production environment set করা
+ENV NODE_ENV=production
+
+# Node/Vite build-এর সময় মেমোরি সংক্রান্ত সমস্যা এড়াতে
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Package files কপি করা
 COPY package.json package-lock.json ./
+
+# Clean install করা
 RUN npm ci
 
-# Source code কপি করে asset build করা
+# Source code কপি করে Frontend assets build করা
 COPY . .
 RUN npm run build
 
@@ -43,7 +51,7 @@ RUN composer install \
 # Copy full application code
 COPY --chown=www-data:www-data . /var/www
 
-# Stage 1 থেকে বিল্ড হওয়া compiled assets (public/build) কপি করা
+# Stage 1 থেকে তৈরি হওয়া compiled assets (public/build) কপি করা
 COPY --from=frontend --chown=www-data:www-data /var/www/public/build /var/www/public/build
 
 # Dump Autoload
