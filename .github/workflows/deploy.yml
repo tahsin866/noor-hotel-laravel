@@ -5,7 +5,7 @@ on:
     branches:
       - main
 
-# GHCR-এ Image Push করার প্রয়োজনীয় পারমিশন
+# GHCR-এ Image Push করার প্রয়োজনীয় পারমিশন
 permissions:
   contents: read
   packages: write
@@ -42,10 +42,13 @@ jobs:
           port: ${{ secrets.SERVER_PORT }}
           script: |
             cd /var/www/my-laravel-app
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            echo "${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml pull
             GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            
+            # Application Optimization & Cache Refresh
             docker exec laravel_app php artisan migrate --force
+            docker exec laravel_app php artisan optimize:clear
             docker exec laravel_app php artisan config:cache
             docker exec laravel_app php artisan route:cache
             docker exec laravel_app php artisan view:cache

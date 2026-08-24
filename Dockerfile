@@ -33,6 +33,13 @@ RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 # Set directory permissions for Laravel
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
+RUN mkdir -p /var/www/storage/framework/views \
+             /var/www/storage/framework/sessions \
+             /var/www/storage/framework/cache
+
+# Set directory permissions for Laravel
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+
 EXPOSE 80
 
 CMD ["php-fpm"]
