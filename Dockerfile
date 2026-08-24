@@ -5,31 +5,34 @@ RUN apk add --no-cache \
     zip unzip curl libpng-dev libjpeg-turbo-dev freetype-dev \
     oniguruma-dev libxml2-dev postgresql-dev nginx supervisor
 
-# PHP Extensions
-RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
+# PHP Extensions (Added pdo_pgsql & pgsql)
+RUN docker-php-ext-install pdo pdo_mysql pdo_pgsql pgsql mbstring exif pcntl bcmath gd
 
-# Composer
+# Get Latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# Copy Composer files first
+# Copy Composer files first to leverage Docker layer caching
 COPY composer.json composer.lock ./
 
-# Install Dependencies without running laravel scripts
-RUN composer install --no-dev --no-scripts --no-autoloader --ignore-platform-reqs
+# Install Dependencies without running scripts/autoloader
+RUN composer install \
+    --no-dev \
+    --no-scripts \
+    --no-autoloader \
+    --prefer-dist \
+    --ignore-platform-reqs
 
-# Copy full application code
-COPY . .
+# Copy full application code with ownership
 COPY --chown=www-data:www-data . /var/www
-# Generate optimized autoloader and run post-install scripts
+
+# Generate optimized autoloader after files are copied
 RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 
-# Set directory permissions
+# Set directory permissions for Laravel
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-RUN apk add --no-cache postgresql-dev \
-    && docker-php-ext-install pdo pdo_pgsql pgsql
-
 
 EXPOSE 80
+
 CMD ["php-fpm"]
