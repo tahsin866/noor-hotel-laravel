@@ -21,12 +21,15 @@ RUN composer install --no-dev --no-scripts --no-autoloader --ignore-platform-req
 
 # Copy full application code
 COPY . .
-
+COPY --chown=www-data:www-data . /var/www
 # Generate optimized autoloader and run post-install scripts
 RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 
 # Set directory permissions
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+RUN apt-get update && apt-get install -y libpq-dev \
+    && docker-php-ext-install pdo pdo_pgsql pgsql
+
 
 EXPOSE 80
 CMD ["php-fpm"]
