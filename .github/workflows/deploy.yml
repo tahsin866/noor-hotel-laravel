@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# GHCR-এ Image Push করার প্রয়োজনীয় পারমিশন
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
