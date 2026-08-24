@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    container_name: laravel_app
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "80:9000"
+    volumes:
+      - ./storage:/var/www/storage
