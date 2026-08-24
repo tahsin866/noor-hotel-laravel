@@ -32,14 +32,14 @@ RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 
 # Set directory permissions for Laravel
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-
+# Storage ও Framework Sub-directories নিশ্চিত তৈরি করা
 RUN mkdir -p /var/www/storage/framework/views \
-             /var/www/storage/framework/sessions \
-             /var/www/storage/framework/cache
+    /var/www/storage/framework/sessions \
+    /var/www/storage/framework/cache
 
-# Set directory permissions for Laravel
+# Ownership এবং Permissions সঠিকভাবে সেট করা
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-
+RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 EXPOSE 80
 
 CMD ["php-fpm"]
