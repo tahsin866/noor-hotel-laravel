@@ -13,16 +13,19 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# Copy Composer files first to avoid caching issues
+# Copy Composer files first
 COPY composer.json composer.lock ./
 
-# Install Dependencies (Ignoring platform reqs if lock mismatch persists)
-RUN composer install --no-dev --optimize-autoloader --ignore-platform-reqs
+# Install Dependencies without running laravel scripts
+RUN composer install --no-dev --no-scripts --no-autoloader --ignore-platform-reqs
 
-# Copy full application
+# Copy full application code
 COPY . .
 
-# Permissions
+# Generate optimized autoloader and run post-install scripts
+RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
+
+# Set directory permissions
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 80
