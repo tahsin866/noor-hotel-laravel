@@ -27,7 +27,7 @@ RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 
 # Set directory permissions
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-RUN apt-get update && apt-get install -y libpq-dev \
+RUN apk add --no-cache postgresql-dev \
     && docker-php-ext-install pdo pdo_pgsql pgsql
 
 
