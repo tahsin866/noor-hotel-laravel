@@ -18,10 +18,10 @@ export default function Welcome() {
                             <span className="text-xl font-bold text-gray-900">Noor Hotel</span>
                         </div>
                         <div className="hidden md:flex items-center gap-8">
-                            <a href="#about" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">About</a>
-                            <a href="#services" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Services</a>
-                            <a href="#rooms" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Rooms</a>
-                            <a href="#contact" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">Contact</a>
+                            <a href="#about" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">এবাউট</a>
+                            <a href="#services" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">সার্ভিস</a>
+                            <a href="#rooms" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">রুম</a>
+                            <a href="#contact" className="text-sm text-gray-600 hover:text-gray-900 transition-colors">যোগাযোগ</a>
                         </div>
                         <div className="flex items-center gap-3">
                             {auth.user ? (
