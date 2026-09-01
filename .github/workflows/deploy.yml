@@ -33,17 +33,7 @@ jobs:
           no-cache: true
           tags: ghcr.io/${{ github.repository }}:latest
 
-      # 2. Build & Push Nginx Image
-      - name: Build and Push Nginx Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./docker/nginx.Dockerfile
-          push: true
-          no-cache: true
-          tags: ghcr.io/${{ github.repository }}-nginx:latest
-
-      # 3. Deploy to VPS
+      # 2. Deploy to VPS via SSH
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -53,11 +43,15 @@ jobs:
           port: ${{ secrets.SERVER_PORT }}
           script: |
             cd /var/www/my-laravel-app
+
+            # Login to GHCR using PAT (or GITHUB_TOKEN fallback)
             echo "${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml pull
-            GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            
-            # Optimization
+
+            # Pull latest image and force re-create containers
+            GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml \
+              up -d --pull always --force-recreate --remove-orphans
+
+            # Run Laravel optimization + migrations
             docker exec laravel_app php artisan migrate --force
             docker exec laravel_app php artisan optimize:clear
             docker exec laravel_app php artisan config:cache
