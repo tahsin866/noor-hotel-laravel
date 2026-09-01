@@ -124,6 +124,7 @@ class ChallanController extends Controller
                 'total_amount' => $challan->total_amount,
                 'total_qty' => $challan->items->sum('quantity'),
                 'status' => $challan->status,
+                'show_print_date' => $challan->show_print_date,
                 'items' => $items,
             ],
         ]);
@@ -155,6 +156,7 @@ class ChallanController extends Controller
             'notes' => $request->notes,
             'total_amount' => $total,
             'status' => 'pending',
+            'show_print_date' => $request->boolean('show_print_date', true),
         ]);
 
         foreach ($request->items as $item) {
@@ -209,6 +211,7 @@ class ChallanController extends Controller
             'address' => $request->address,
             'notes' => $request->notes,
             'total_amount' => $total,
+            'show_print_date' => $request->boolean('show_print_date', true),
         ]);
 
         $challan->items()->delete();

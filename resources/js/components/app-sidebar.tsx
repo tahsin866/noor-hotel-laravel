@@ -20,69 +20,69 @@ import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
+        title: 'ড্যাশবোর্ড',
         href: dashboard(),
         icon: LayoutGrid,
         permission: 'view_dashboard',
     },
     {
-        title: 'Party',
+        title: 'পার্টি',
         href: '/party',
         icon: Users,
         permission: 'manage_parties',
     },
     {
-        title: 'Purchase Order',
+        title: 'ক্রয় অর্ডার',
         href: '/po',
         icon: ShoppingCart,
         permission: 'manage_products',
     },
     {
-        title: 'Chalans',
+        title: 'চালান',
         href: '/chalans',
         icon: Truck,
         permissions: ['manage_challans', 'print_challans'],
     },
     {
-        title: 'Invoices',
+        title: 'চালান (Invoice)',
         href: '/invoices',
         icon: FileText,
         permission: 'manage_invoices',
     },
     {
-        title: 'Payments',
+        title: 'পেমেন্ট',
         href: '/payments',
         icon: BarChart3,
         permission: 'manage_payments',
     },
     {
-        title: 'Report',
+        title: 'রিপোর্ট',
         href: '/report',
         icon: BarChart3,
         children: [
-            { title: 'Purchase Report', href: '/report/purchase', icon: ShoppingCart },
-            { title: 'Challan Report', href: '/report/challan', icon: Truck },
-            { title: 'Invoice Report', href: '/report/invoice', icon: FileText },
-            { title: 'Payments Report', href: '/report/payment', icon: CreditCard },
+            { title: 'ক্রয় রিপোর্ট', href: '/report/purchase', icon: ShoppingCart },
+            { title: 'চালান রিপোর্ট', href: '/report/challan', icon: Truck },
+            { title: 'ইনভয়েস রিপোর্ট', href: '/report/invoice', icon: FileText },
+            { title: 'পেমেন্ট রিপোর্ট', href: '/report/payment', icon: CreditCard },
         ],
     },
     {
-        title: 'Security',
+        title: 'নিরাপত্তা',
         href: editSecurity(),
         icon: ShieldCheck,
     },
     {
-        title: 'Emails',
+        title: 'ইমেইল',
         href: '/emails',
         icon: Inbox,
     },
     {
-        title: 'Notification',
+        title: 'নোটিফিকেশন',
         href: '/notifications',
         icon: Bell,
     },
     {
-        title: 'Trash',
+        title: 'ট্র্যাশ',
         href: '/trash',
         icon: Trash2,
     },
@@ -90,17 +90,17 @@ const mainNavItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
     {
-        title: 'Users',
+        title: 'ব্যবহারকারী',
         href: '/admin/users',
         icon: UserCog,
     },
     {
-        title: 'Roles',
+        title: 'ভূমিকা',
         href: '/admin/roles',
         icon: Shield,
     },
     {
-        title: 'Permissions',
+        title: 'অনুমতি',
         href: '/admin/permissions',
         icon: Lock,
     },
@@ -125,7 +125,7 @@ export function AppSidebar() {
     const isAdmin = userPermissions.includes('manage_users') || userPermissions.includes('manage_roles');
 
     const visibleMainItems = mainNavItems.map((item) =>
-        item.title === 'Notification' && unreadCount > 0 ? { ...item, badge: unreadCount } : item
+        item.title === 'নোটিফিকেশন' && unreadCount > 0 ? { ...item, badge: unreadCount } : item
     ).filter((item) => {
         if (!item.permission && !item.permissions) {
 return true;

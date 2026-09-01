@@ -20,6 +20,11 @@ class Challan extends Model
         'notes',
         'total_amount',
         'status',
+        'show_print_date',
+    ];
+
+    protected $casts = [
+        'show_print_date' => 'boolean',
     ];
 
     public function product()

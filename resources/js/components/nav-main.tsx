@@ -23,7 +23,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
 
     return (
         <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel>Platform</SidebarGroupLabel>
+            <SidebarGroupLabel>প্ল্যাটফর্ম</SidebarGroupLabel>
             <SidebarMenu>
                 {items.map((item) =>
                     item.children && item.children.length > 0 ? (
@@ -34,7 +34,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                         >
                             <SidebarMenuItem>
                                 <CollapsibleTrigger asChild>
-                                    <SidebarMenuButton tooltip={{ children: item.title }}>
+                                    <SidebarMenuButton tooltip={{ children: item.title }} className="text-md font-bold">
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>
                                         <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
@@ -47,6 +47,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                                                 <SidebarMenuSubButton
                                                     asChild
                                                     isActive={isCurrentUrl(child.href)}
+                                                    className="text-md font-bold"
                                                 >
                                                     <Link href={child.href} prefetch>
                                                         <span>{child.title}</span>
@@ -64,12 +65,13 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
                                 asChild
                                 isActive={isCurrentUrl(item.href)}
                                 tooltip={{ children: item.title }}
+                                className="text-md font-bold"
                             >
                                 <Link href={item.href} prefetch>
                                     {item.icon && <item.icon />}
                                     <span>{item.title}</span>
                                     {item.badge ? (
-                                        <span className="ml-auto rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                                        <span className="ml-auto rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                                             {item.badge}
                                         </span>
                                     ) : null}

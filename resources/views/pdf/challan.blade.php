@@ -36,7 +36,7 @@
         <table style="width:100%;border:none;margin-bottom:16px;font-size:13px;">
             <tr>
                 <td style="width:50%;border:none;padding:4px 0;"><strong>Challan No:</strong> {{ $challan->challan_number }}</td>
-                <td style="width:50%;border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> {{ \Carbon\Carbon::parse($challan->date)->format('d/m/Y') }}</td>
+                <td style="width:50%;border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> {{ $challan->show_print_date ? \Carbon\Carbon::parse($challan->date)->format('d/m/Y') : '' }}</td>
             </tr>
             @if($customer_po_number && $customer_po_number !== '-' && $customer_po_number !== '')
             <tr>

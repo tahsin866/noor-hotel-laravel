@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import {
     Eye,
     Plus,
@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -49,6 +50,7 @@ type ProductMeal = {
     quantity: number;
     unit_price: number;
     delivered_quantity: number;
+    allocated_quantity?: number | string;
     description?: string;
 };
 
@@ -137,6 +139,14 @@ function fmtDate(d: string) {
         return '—';
     }
 
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+
+    if (match) {
+        const [, year, month, day] = match;
+
+        return `${day}/${month}/${year}`;
+    }
+
     return new Date(d).toLocaleDateString('en-GB');
 }
 
@@ -171,6 +181,8 @@ function ChallanForm({
     items,
     updateItemQty,
     grandTotal,
+    showPrintDate,
+    setShowPrintDate,
     onCancel,
 }: {
     title: string;
@@ -194,6 +206,8 @@ function ChallanForm({
     items: FormItem[];
     updateItemQty: (idx: number, qty: number) => void;
     grandTotal: number;
+    showPrintDate: boolean;
+    setShowPrintDate: (v: boolean) => void;
     onCancel: () => void;
 }) {
     const [partySearch, setPartySearch] = useState('');
@@ -239,16 +253,16 @@ function ChallanForm({
                             <button
                                 type="button"
                                 onClick={() => setPartyOpen((v) => !v)}
-                                className="flex h-9 w-full items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                className="flex h-9 w-full items-center justify-between gap-2 overflow-hidden rounded-md border border-input bg-transparent px-3 text-sm shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                             >
-                                <span className="truncate">
+                                <span className="min-w-0 truncate">
                                     {selectedPartyLabel}
                                 </span>
                                 <ChevronDown className="size-4 shrink-0 opacity-50" />
                             </button>
                             {partyOpen && (
                                 <>
-                                    <div className="absolute z-50 mt-1 w-full min-w-80 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                    <div className="absolute z-50 mt-1 max-w-full overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
                                         <Input
                                             autoFocus
                                             placeholder="Search party..."
@@ -258,7 +272,7 @@ function ChallanForm({
                                             }
                                             className="h-8 text-sm"
                                         />
-                                        <div className="mt-1 max-h-52 overflow-auto">
+                                        <div className="mt-1 max-h-52 min-w-60 overflow-auto">
                                             {filteredPartyOptions.length ===
                                             0 ? (
                                                 <div className="px-3 py-4 text-center text-sm text-muted-foreground">
@@ -270,7 +284,7 @@ function ChallanForm({
                                                         <button
                                                             key={p.id}
                                                             type="button"
-                                                            className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${formParty === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                            className={`w-60 max-w-full overflow-hidden rounded-sm px-3 py-2 text-left text-sm text-ellipsis whitespace-nowrap transition-colors hover:bg-accent ${formParty === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                             onClick={() => {
                                                                 setFormParty(
                                                                     String(
@@ -541,6 +555,22 @@ function ChallanForm({
                     )}
                 </div>
             </div>
+            <div className="flex items-center gap-2">
+                <Checkbox
+                    id="show_print_date"
+                    checked={showPrintDate}
+                    onCheckedChange={(checked) =>
+                        setShowPrintDate(checked === true)
+                    }
+                    className="data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600"
+                />
+                <Label
+                    htmlFor="show_print_date"
+                    className="cursor-pointer text-sm font-medium"
+                >
+                    Show date on print
+                </Label>
+            </div>
             <DialogFooter className="border-t border-border pt-4">
                 <Button variant="outline" onClick={onCancel}>
                     Cancel
@@ -591,6 +621,7 @@ export default function Challans({
     const [notes, setNotes] = useState('');
     const [poInfo, setPoInfo] = useState<Product | null>(null);
     const [items, setItems] = useState<FormItem[]>([]);
+    const [showPrintDate, setShowPrintDate] = useState(true);
 
     const filteredFilterParties = parties.filter((p) =>
         p.party_name.toLowerCase().includes(partyFilterSearch.toLowerCase()),
@@ -629,6 +660,10 @@ export default function Challans({
         fetchChallans();
     }, [fetchChallans]);
 
+    const refreshProducts = useCallback(() => {
+        router.reload({ only: ['products'] });
+    }, []);
+
     const resetForm = () => {
         setSelectedPo('');
         setFormParty('');
@@ -637,6 +672,7 @@ export default function Challans({
         setNotes('');
         setPoInfo(null);
         setItems([]);
+        setShowPrintDate(true);
         setErrors({});
     };
 
@@ -661,7 +697,7 @@ export default function Challans({
             .map((m) => {
                 const remaining = Math.max(
                     0,
-                    m.quantity - (m.delivered_quantity || 0),
+                    m.quantity - Number(m.allocated_quantity || 0),
                 );
 
                 if (remaining <= 0) {
@@ -698,18 +734,19 @@ export default function Challans({
         setPoInfo(p);
         const rows = (p.meals || [])
             .map((m) => {
+                const existing = existingItems.find(
+                    (ei) => ei.product_meal_id === m.id,
+                );
+                const existingQty = existing ? Number(existing.quantity) : 0;
                 const remaining = Math.max(
                     0,
-                    m.quantity - (m.delivered_quantity || 0),
+                    m.quantity -
+                        (Number(m.allocated_quantity || 0) - existingQty),
                 );
 
                 if (remaining <= 0) {
                     return null;
                 }
-
-                const existing = existingItems.find(
-                    (ei) => ei.product_meal_id === m.id,
-                );
 
                 return {
                     product_meal_id: m.id,
@@ -743,6 +780,7 @@ export default function Challans({
         date,
         address,
         notes,
+        show_print_date: showPrintDate,
         items: items.map((it) => ({
             product_meal_id: it.product_meal_id,
             quantity: it.quantity,
@@ -775,6 +813,7 @@ export default function Challans({
                 setCreateOpen(false);
                 resetForm();
                 fetchChallans();
+                refreshProducts();
             } else if (res.status === 422) {
                 setErrors(data.errors || {});
             } else {
@@ -812,6 +851,7 @@ export default function Challans({
                 setEditing(null);
                 resetForm();
                 fetchChallans();
+                refreshProducts();
             } else if (res.status === 422) {
                 setErrors(data.errors || {});
             } else {
@@ -843,6 +883,7 @@ export default function Challans({
                 setDeleteOpen(false);
                 setDeleting(null);
                 fetchChallans();
+                refreshProducts();
             } else {
                 toast.error(data.message || 'Something went wrong.');
             }
@@ -877,6 +918,7 @@ export default function Challans({
             setDate(d.date);
             setAddress(d.address || '');
             setNotes(d.notes || '');
+            setShowPrintDate(d.show_print_date !== false);
             const p = products.find((x) => x.id === d.product_id);
             setFormParty(p?.party_id ? String(p.party_id) : '');
             loadPoDetailsForEdit(String(d.product_id), d.items || []);
@@ -902,6 +944,7 @@ export default function Challans({
             if (res.ok) {
                 toast.success(data.message || 'Challan dispatched');
                 fetchChallans();
+                refreshProducts();
             } else {
                 toast.error(data.message || 'Something went wrong.');
             }
@@ -925,6 +968,7 @@ export default function Challans({
             if (res.ok) {
                 toast.success(data.message || 'Challan delivered');
                 fetchChallans();
+                refreshProducts();
             } else {
                 toast.error(data.message || 'Something went wrong.');
             }
@@ -948,6 +992,7 @@ export default function Challans({
             if (res.ok) {
                 toast.success(data.message || 'Challan cancelled');
                 fetchChallans();
+                refreshProducts();
             } else {
                 toast.error(data.message || 'Something went wrong.');
             }
@@ -971,6 +1016,7 @@ export default function Challans({
             if (res.ok) {
                 toast.success('Challan returned to pending');
                 fetchChallans();
+                refreshProducts();
             } else {
                 toast.error(data.message || 'Something went wrong.');
             }
@@ -994,6 +1040,7 @@ export default function Challans({
             if (res.ok) {
                 toast.success('Challan returned to dispatched');
                 fetchChallans();
+                refreshProducts();
             } else {
                 toast.error(data.message || 'Something went wrong.');
             }
@@ -1040,10 +1087,8 @@ export default function Challans({
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
         table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
         .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
-        .content-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
-        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: auto; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 40px; }
         .signatures { margin-top: 30px; }
-        .body-content { flex: 1; }
     </style>
 </head>
 <body>
@@ -1068,7 +1113,7 @@ export default function Challans({
                 }
                 <tr>
                     <td style="border:none;padding:4px 0;"></td>
-                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
+                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.show_print_date !== false ? fmtDate(c.date) : '<span style="display:inline-block;width:90px;border-bottom:1px solid #1e293b;">&nbsp;</span>'}</td>
                 </tr>
             </table>
             <table class="items">
@@ -1112,7 +1157,11 @@ export default function Challans({
                 win.document.write(html);
                 win.document.close();
                 win.focus();
-                win.print();
+
+                setTimeout(() => {
+                    win.focus();
+                    win.print();
+                }, 500);
             }
         } catch {
             toast.error('Failed to load challan');
@@ -1122,12 +1171,14 @@ export default function Challans({
     const totalPages = Math.ceil(total / limit);
     const from = total === 0 ? 0 : (page - 1) * limit + 1;
     const to = Math.min(page * limit, total);
-    const filteredProducts = (formParty
-        ? products.filter((p) => String(p.party_id) === formParty)
-        : products
+    const filteredProducts = (
+        formParty
+            ? products.filter((p) => String(p.party_id) === formParty)
+            : products
     ).filter((p) => {
         const totalRemaining = (p.meals || []).reduce(
-            (sum, m) => sum + Math.max(0, m.quantity - (m.delivered_quantity || 0)),
+            (sum, m) =>
+                sum + Math.max(0, m.quantity - (m.delivered_quantity || 0)),
             0,
         );
         return totalRemaining > 0;
@@ -1157,6 +1208,8 @@ export default function Challans({
         items,
         updateItemQty,
         grandTotal,
+        showPrintDate,
+        setShowPrintDate,
     };
 
     return (
@@ -1237,7 +1290,7 @@ export default function Challans({
                                     <div className="mt-1 max-h-60 overflow-auto">
                                         <button
                                             type="button"
-                                            className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
+                                            className={`w-full overflow-hidden rounded-sm px-3 py-2 text-left text-sm text-ellipsis whitespace-nowrap transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
                                             onClick={() => {
                                                 setPartyFilter('');
                                                 setPartyFilterOpen(false);
@@ -1256,7 +1309,7 @@ export default function Challans({
                                                 <button
                                                     key={p.id}
                                                     type="button"
-                                                    className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    className={`w-full overflow-hidden rounded-sm px-3 py-2 text-left text-sm text-ellipsis whitespace-nowrap transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                     onClick={() => {
                                                         setPartyFilter(
                                                             String(p.id),
@@ -1358,7 +1411,7 @@ export default function Challans({
                                                                 ${customerPoRow}
                                                                 <tr>
                                                                     <td style="border:none;padding:4px 0;"></td>
-                                                                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.date ? new Date(c.date).toLocaleDateString('en-GB') : '—'}</td>
+                                                                    <td style="border:none;padding:4px 0;text-align:right;"><strong>Date:</strong> ${c.show_print_date !== false ? fmtDate(c.date) : '<span style="display:inline-block;width:90px;border-bottom:1px solid #1e293b;">&nbsp;</span>'}</td>
                                                                 </tr>
                                                             </table>
                                                             <table class="items">
@@ -1417,12 +1470,10 @@ export default function Challans({
         table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
         table.items td { padding: 8px 12px; border: 1px solid #000; }
         .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
-        .content-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
-        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: auto; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 40px; }
         .signatures { margin-top: 30px; }
-        .challan-page { page-break-after: always; display: flex; flex-direction: column; }
+        .challan-page { page-break-after: always; }
         .challan-page:last-child { page-break-after: avoid; }
-        .body-content { flex: 1; }
     </style>
 </head>
 <body>
@@ -1436,7 +1487,11 @@ export default function Challans({
                                             win.document.write(html);
                                             win.document.close();
                                             win.focus();
-                                            win.print();
+
+                                            setTimeout(() => {
+                                                win.focus();
+                                                win.print();
+                                            }, 500);
                                         }
 
                                         setSelectedIds(new Set());
@@ -1476,6 +1531,7 @@ export default function Challans({
                                     );
                                     setSelectedIds(new Set());
                                     fetchChallans();
+                                    refreshProducts();
                                 }}
                             >
                                 <Send className="mr-1 size-3" />
@@ -1509,6 +1565,7 @@ export default function Challans({
                                     );
                                     setSelectedIds(new Set());
                                     fetchChallans();
+                                    refreshProducts();
                                 }}
                             >
                                 <Send className="mr-1 size-3" />
@@ -1542,6 +1599,7 @@ export default function Challans({
                                     );
                                     setSelectedIds(new Set());
                                     fetchChallans();
+                                    refreshProducts();
                                 }}
                             >
                                 <Trash2 className="mr-1 size-3" />

@@ -9,6 +9,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
@@ -144,6 +145,57 @@ class ProductController extends Controller
         $product->meals_total = $subtotal + $vat;
 
         return response()->json($product);
+    }
+
+    public function summaryChallan(Product $product): JsonResponse
+    {
+        $product->load(['party:id,party_name']);
+
+        $year = now()->year;
+        $prefix = "Noor/{$year}/CH/";
+        $last = DB::select(
+            'SELECT MAX(CAST(SUBSTR(challan_number, ?) AS INTEGER)) as max_num FROM challans WHERE challan_number LIKE ?',
+            [strlen($prefix) + 1, $prefix.'%']
+        );
+        $next = max(($last[0]->max_num ?? 0) + 1, 650);
+        $ref = $prefix.str_pad($next, 4, '0', STR_PAD_LEFT);
+
+        $challans = $product->challans()
+            ->where('status', '!=', 'cancelled')
+            ->with(['items.productMeal', 'items.productMeal.product'])
+            ->orderBy('created_at')
+            ->get();
+
+        $items = $challans->flatMap(function ($c) {
+            return $c->items->map(function ($it) {
+                return [
+                    'description' => $it->productMeal->description
+                        ?? $it->productMeal->product->name
+                        ?? '-',
+                    'quantity' => (int) $it->quantity,
+                    'meal_type' => $it->productMeal->meal_type ?? '',
+                ];
+            });
+        })->values();
+
+        $notes = $challans->map(fn ($c) => $c->notes)
+            ->filter()
+            ->unique()
+            ->implode("\n");
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'ref' => $ref,
+                'client' => $product->party->party_name ?? '-',
+                'product_name' => $product->name,
+                'po_number' => $product->code,
+                'customer_po_number' => $product->customer_po_number,
+                'delivery_date' => now()->format('d/m/Y'),
+                'notes' => $notes,
+                'items' => $items,
+            ],
+        ]);
     }
 
     public function update(Request $request, Product $product): JsonResponse

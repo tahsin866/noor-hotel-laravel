@@ -18,6 +18,7 @@ Route::get('party/{party}/print', [PartyController::class, 'print']);
 Route::get('products', [ProductController::class, 'index']);
 Route::post('products', [ProductController::class, 'store']);
 Route::get('products/{product}/print', [ProductController::class, 'print']);
+Route::get('products/{product}/summary-challan', [ProductController::class, 'summaryChallan']);
 Route::get('products/{product}', [ProductController::class, 'show']);
 Route::put('products/{product}', [ProductController::class, 'update']);
 Route::delete('products/{product}', [ProductController::class, 'destroy']);

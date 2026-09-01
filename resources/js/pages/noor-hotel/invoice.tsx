@@ -252,7 +252,13 @@ export default function Invoices({ parties, products, challans }: { parties: Par
     };
 
     const filteredProducts = formParty
-        ? products.filter((p) => String(p.party_id) === String(formParty))
+        ? products.filter((p) => {
+              if (String(p.party_id) !== String(formParty)) return false;
+
+              return challans.some(
+                  (c) => c.product_id === p.id && c.status === 'pending',
+              );
+          })
         : [];
 
     const filteredChallans = formChallans.filter((c) => {
@@ -407,6 +413,80 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         return Number.isInteger(val) ? val.toLocaleString('en-US') : val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    const ONES = [
+        '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+        'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+        'Seventeen', 'Eighteen', 'Nineteen',
+    ];
+
+    const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    function chunkToWords(n: number): string {
+        let words = '';
+        if (n >= 100) {
+            words += ONES[Math.floor(n / 100)] + ' Hundred ';
+            n %= 100;
+        }
+        if (n >= 20) {
+            words += TENS[Math.floor(n / 10)] + ' ';
+            n %= 10;
+        }
+        if (n > 0) {
+            words += ONES[n] + ' ';
+        }
+        return words.trim();
+    }
+
+    function numberToWords(amount: number): string {
+        let whole = Math.floor(amount);
+        let decimal = Math.round((amount - whole) * 100);
+
+        let words: string;
+        if (whole === 0) {
+            words = 'Zero';
+        } else {
+            words = '';
+            if (whole >= 10000000) {
+                words += chunkToWords(Math.floor(whole / 10000000)) + ' Crore ';
+                whole %= 10000000;
+            }
+            if (whole >= 100000) {
+                words += chunkToWords(Math.floor(whole / 100000)) + ' Lakh ';
+                whole %= 100000;
+            }
+            if (whole >= 1000) {
+                words += chunkToWords(Math.floor(whole / 1000)) + ' Thousand ';
+                whole %= 1000;
+            }
+            if (whole >= 100) {
+                words += chunkToWords(Math.floor(whole / 100)) + ' Hundred ';
+                whole %= 100;
+            }
+            if (whole >= 20) {
+                words += TENS[Math.floor(whole / 10)] + ' ';
+                whole %= 10;
+            }
+            if (whole > 0) {
+                words += ONES[whole] + ' ';
+            }
+            words = words.trim() + ' Taka';
+        }
+
+        if (decimal > 0) {
+            let decimalWords = '';
+            if (decimal >= 20) {
+                decimalWords += TENS[Math.floor(decimal / 10)] + ' ';
+                decimal %= 10;
+            }
+            if (decimal > 0) {
+                decimalWords += ONES[decimal];
+            }
+            words += ' and ' + decimalWords.trim() + ' Paisa';
+        }
+
+        return words + ' Only';
+    }
+
     const printInvoice = async (id: number) => {
         try {
             const res = await fetch(`/api/invoices/${id}`, {
@@ -422,18 +502,8 @@ export default function Invoices({ parties, products, challans }: { parties: Par
             let sl = 0;
             let itemRows = '';
             if (d.items) {
-                const grouped: Record<string, InvoiceItem> = {};
-                d.items.forEach((it: InvoiceItem) => {
-                    const key = `${it.product_name}_${it.meal_type}_${it.unit_price}`;
-                    if (!grouped[key]) {
-                        grouped[key] = { ...it, quantity: 0, vat_amount: 0, total: 0 };
-                    }
-                    grouped[key].quantity += it.quantity;
-                    grouped[key].vat_amount += it.vat_amount;
-                    grouped[key].total += it.total;
-                });
-                Object.values(grouped)
-                    .filter((it) => it.quantity > 0)
+                d.items
+                    .filter((it: InvoiceItem) => it.quantity > 0)
                     .forEach((it: InvoiceItem) => {
                     sl++;
                     const lineAmount = it.quantity * it.unit_price;
@@ -524,6 +594,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 <td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;font-size:16px;"><strong>Tk ${fmtPrice(d.total_amount)}</strong></td>
             </tr>`}
         </table>
+        <div class="in-words"><strong>In Words:</strong> ${numberToWords(d.total_amount || 0)}</div>
     </div>
     <div style="position:fixed;bottom:10mm;left:10mm;right:10mm;">
         <table style="width:100%;border:none;font-size:12px;">
@@ -580,18 +651,8 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                 let itemRows = '';
                 if (d.items) {
                     let sl = 0;
-                    const grouped: Record<string, InvoiceItem> = {};
-                    d.items.forEach((it: InvoiceItem) => {
-                        const key = `${it.product_name}_${it.meal_type}_${it.unit_price}`;
-                        if (!grouped[key]) {
-                            grouped[key] = { ...it, quantity: 0, vat_amount: 0, total: 0 };
-                        }
-                        grouped[key].quantity += it.quantity;
-                        grouped[key].vat_amount += it.vat_amount;
-                        grouped[key].total += it.total;
-                    });
-                    Object.values(grouped)
-                        .filter((it) => it.quantity > 0)
+                    d.items
+                        .filter((it: InvoiceItem) => it.quantity > 0)
                         .forEach((it: InvoiceItem) => {
                         sl++;
                         const lineAmount = it.quantity * it.unit_price;
@@ -614,6 +675,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                         <table style="border:none;font-size:14px;margin-left:auto;">
                             ${d.total_vat > 0 ? `<tr><td style="border:none;padding:4px 10px 4px 0;text-align:right;">Subtotal:</td><td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk ${fmtPrice(d.subtotal || 0)}</strong></td></tr><tr><td style="border:none;padding:4px 10px 4px 0;text-align:right;">VAT:</td><td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;"><strong>Tk ${fmtPrice(d.total_vat || 0)}</strong></td></tr><tr><td style="border:none;padding:4px 10px 4px 0;text-align:right;border-top:2px solid #e2e8f0;">Grand Total:</td><td style="border:none;padding:4px 0;text-align:right;border-top:2px solid #e2e8f0;white-space:nowrap;font-size:16px;"><strong>Tk ${fmtPrice(d.total_amount)}</strong></td></tr>` : `<tr><td style="border:none;padding:4px 10px 4px 0;text-align:right;">Total Amount:</td><td style="border:none;padding:4px 0;text-align:right;white-space:nowrap;font-size:16px;"><strong>Tk ${fmtPrice(d.total_amount)}</strong></td></tr>`}
                         </table>
+                        <div style="text-align:left;margin-top:8px;font-size:12px;color:#475569;"><strong>In Words:</strong> ${numberToWords(d.total_amount || 0)}</div>
                     </div>
                     <div style="position:fixed;bottom:10mm;left:10mm;right:10mm;">
                         <table style="width:100%;border:none;font-size:12px;">
@@ -1050,7 +1112,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                     </div>
                                     <div className="max-h-48 space-y-1 overflow-y-auto">
                                         {filteredChallans.length === 0 ? (
-                                            <p className="py-2 text-xs text-muted-foreground">No delivered challans for this party{formProduct ? ' and PO' : ''}</p>
+                                            <p className="py-2 text-xs text-muted-foreground">No pending challans for this party{formProduct ? ' and PO' : ''}</p>
                                         ) : (
                                             filteredChallans.map((c) => (
                                                 <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-md bg-muted/30 p-2 text-sm hover:bg-muted/60">

@@ -99,46 +99,22 @@ class InvoiceController extends Controller
             'challans.items.productMeal',
         ])->findOrFail($id);
 
-        $descMap = [];
-        foreach ($invoice->challans as $challan) {
-            foreach ($challan->items as $ci) {
-                $pm = $ci->productMeal;
-                if (! $pm) {
-                    continue;
-                }
-                $dKey = ($pm->product_id ?? '').'_'.$pm->meal_type.'_'.rtrim(rtrim(number_format((float) $ci->unit_price, 2, '.', ''), '0'), '.');
-                if (! isset($descMap[$dKey])) {
-                    $descMap[$dKey] = $pm->description ?? $pm->product->name ?? '-';
-                }
-            }
-        }
-
-        $grouped = [];
-        foreach ($invoice->items as $item) {
-            $key = $item->product_id.'_'.$item->meal_type.'_'.rtrim(rtrim(number_format((float) $item->unit_price, 2, '.', ''), '0'), '.');
-
-            if (! isset($grouped[$key])) {
-                $description = $descMap[$key] ?? ($item->product->name ?? '-');
-                $grouped[$key] = [
-                    'id' => $item->id,
-                    'product_id' => $item->product_id,
-                    'product_name' => $item->product->name ?? '-',
-                    'description' => $description,
-                    'meal_type' => $item->meal_type,
-                    'quantity' => 0,
-                    'unit_price' => (float) $item->unit_price,
-                    'vat_rate' => (float) $item->vat_rate,
-                    'vat_amount' => 0,
-                    'total' => 0,
-                ];
-            }
-
-            $grouped[$key]['quantity'] += (int) $item->quantity;
-            $grouped[$key]['vat_amount'] += (float) $item->vat_amount;
-            $grouped[$key]['total'] += (float) $item->total;
-        }
-
-        $items = array_values($grouped);
+        $items = $invoice->items->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'product_id' => $item->product_id,
+                'product_name' => $item->product->name ?? '-',
+                'description' => $item->description
+                    ?? $item->product->name
+                    ?? '-',
+                'meal_type' => $item->meal_type,
+                'quantity' => (int) $item->quantity,
+                'unit_price' => (float) $item->unit_price,
+                'vat_rate' => (float) $item->vat_rate,
+                'vat_amount' => (float) $item->vat_amount,
+                'total' => (float) $item->total,
+            ];
+        });
 
         $challans = $invoice->challans->map(function ($ch) {
             $challanItems = $ch->items->map(function ($ci) {
@@ -326,7 +302,7 @@ class InvoiceController extends Controller
     {
         $subtotal = 0;
         $totalVat = 0;
-        $grouped = [];
+        $items = [];
 
         foreach ($challans as $challan) {
             foreach ($challan->items as $ci) {
@@ -335,30 +311,25 @@ class InvoiceController extends Controller
                     continue;
                 }
 
-                $mealType = $ci->productMeal->meal_type ?? null;
                 $unitPrice = (float) $ci->unit_price;
                 $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 10);
                 $quantity = (int) $ci->quantity;
-
-                $key = $productId.'_'.$mealType.'_'.rtrim(rtrim(number_format($unitPrice, 2, '.', ''), '0'), '.');
-
-                if (! isset($grouped[$key])) {
-                    $grouped[$key] = [
-                        'product_id' => $productId,
-                        'meal_type' => $mealType,
-                        'quantity' => 0,
-                        'unit_price' => $unitPrice,
-                        'vat_rate' => $vatRate,
-                        'vat_amount' => 0,
-                        'total' => 0,
-                    ];
-                }
-
-                $grouped[$key]['quantity'] += $quantity;
                 $lineSubtotal = $quantity * $unitPrice;
                 $vatAmount = round($lineSubtotal * $vatRate / 100, 2);
-                $grouped[$key]['vat_amount'] += $vatAmount;
-                $grouped[$key]['total'] += $lineSubtotal + $vatAmount;
+
+                $items[] = [
+                    'product_id' => $productId,
+                    'description' => $ci->productMeal->description
+                        ?? $ci->productMeal->product->name
+                        ?? '-',
+                    'meal_type' => $ci->productMeal->meal_type ?? null,
+                    'quantity' => $quantity,
+                    'unit_price' => $unitPrice,
+                    'vat_rate' => $vatRate,
+                    'vat_amount' => $vatAmount,
+                    'total' => $lineSubtotal + $vatAmount,
+                ];
+
                 $subtotal += $lineSubtotal;
                 $totalVat += $vatAmount;
             }
@@ -368,7 +339,7 @@ class InvoiceController extends Controller
             'subtotal' => $subtotal,
             'total_vat' => $totalVat,
             'total_amount' => $subtotal + $totalVat,
-            'items' => array_values($grouped),
+            'items' => $items,
         ];
     }
 
@@ -726,44 +697,20 @@ class InvoiceController extends Controller
             'challans.items.productMeal.product',
         ])->findOrFail($id);
 
-        $descMap = [];
-        foreach ($invoice->challans as $challan) {
-            foreach ($challan->items as $ci) {
-                $pm = $ci->productMeal;
-                if (! $pm) {
-                    continue;
-                }
-                $dKey = ($pm->product_id ?? '').'_'.$pm->meal_type.'_'.rtrim(rtrim(number_format((float) $ci->unit_price, 2, '.', ''), '0'), '.');
-                if (! isset($descMap[$dKey])) {
-                    $descMap[$dKey] = $pm->description ?? $pm->product->name ?? '-';
-                }
-            }
-        }
-
-        $grouped = [];
-        foreach ($invoice->items as $item) {
-            $key = $item->product_id.'_'.$item->meal_type.'_'.rtrim(rtrim(number_format((float) $item->unit_price, 2, '.', ''), '0'), '.');
-
-            if (! isset($grouped[$key])) {
-                $description = $descMap[$key] ?? ($item->product->name ?? '-');
-                $grouped[$key] = [
-                    'product_name' => $item->product->name ?? '-',
-                    'description' => $description,
-                    'meal_type' => $item->meal_type,
-                    'quantity' => 0,
-                    'unit_price' => (float) $item->unit_price,
-                    'vat_rate' => (float) $item->vat_rate,
-                    'vat_amount' => 0,
-                    'total' => 0,
-                ];
-            }
-
-            $grouped[$key]['quantity'] += (int) $item->quantity;
-            $grouped[$key]['vat_amount'] += (float) $item->vat_amount;
-            $grouped[$key]['total'] += (float) $item->total;
-        }
-
-        $items = array_values($grouped);
+        $items = $invoice->items->map(function ($item) {
+            return [
+                'product_name' => $item->product->name ?? '-',
+                'description' => $item->description
+                    ?? $item->product->name
+                    ?? '-',
+                'meal_type' => $item->meal_type,
+                'quantity' => (int) $item->quantity,
+                'unit_price' => (float) $item->unit_price,
+                'vat_rate' => (float) $item->vat_rate,
+                'vat_amount' => (float) $item->vat_amount,
+                'total' => (float) $item->total,
+            ];
+        })->all();
 
         $challans = $invoice->challans->map(function ($ch) {
             $challanItems = $ch->items->map(function ($ci) {

@@ -9,12 +9,13 @@ use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\UserController;
 use App\Models\Challan;
+use App\Models\ChallanItem;
 use App\Models\Party;
 use App\Models\Product;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::inertia('/', 'welcome')->name('home');
+Route::get('/', fn () => redirect()->route('login'))->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', DashboardController::class)->name('dashboard');
@@ -33,7 +34,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('po');
 
     Route::middleware(['permission:manage_challans,print_challans'])->get('chalans', function () {
-        $products = Product::with(['party', 'meals'])
+        $products = Product::with([
+            'party',
+            'meals' => function ($query) {
+                $query->addSelect([
+                    'allocated_quantity' => ChallanItem::query()
+                        ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
+                        ->whereColumn('challan_items.product_meal_id', 'product_meals.id')
+                        ->where('challans.status', '!=', 'cancelled')
+                        ->whereNull('challans.deleted_at')
+                        ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
+                ]);
+            },
+        ])
             ->select('id', 'name', 'code', 'unit', 'party_id')
             ->withSum('meals as total_ordered', 'quantity')
             ->withSum('meals as total_delivered', 'delivered_quantity')
@@ -52,7 +65,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->select('id', 'name', 'code', 'unit', 'party_id', 'customer_po_number')
             ->get();
         $challans = Challan::with(['product', 'product.party', 'items.productMeal'])
-            ->where('status', 'delivered')
+            ->where('status', 'pending')
             ->whereNotIn('id', function ($query) {
                 $query->select('challan_id')->from('invoice_challans');
             })

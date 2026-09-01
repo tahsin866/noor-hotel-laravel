@@ -1291,6 +1291,121 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         setChallanOpen(true);
     };
 
+    const printSummaryChallans = async (product: Product) => {
+        try {
+            const res = await fetch(
+                `/api/products/${product.id}/summary-challan`,
+                { headers: { 'X-Requested-With': 'XMLHttpRequest' } },
+            );
+            const data = await res.json();
+            const s = data.data;
+
+            if (!s) {
+                toast.error('Failed to load summary challan');
+
+                return;
+            }
+
+            const rows = (s.items || [])
+                .filter((it: { quantity: number }) => it.quantity > 0)
+                .map(
+                    (it: { description: string; quantity: number }, i: number) =>
+                        `<tr>
+                            <td style="width:30px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
+                            <td style="padding:6px 12px;border:1px solid #000;">${it.description}</td>
+                            <td style="width:80px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
+                        </tr>`,
+                )
+                .join('');
+
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8"/>
+    <title>Delivery Challan ${s.ref}</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
+        h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; text-align: center; }
+        .underline { border-bottom: 3px solid #2563eb; width: 200px; margin: 6px auto 0; }
+        .sub { color: #64748b; margin: 4px 0 0; font-size: 12px; text-align: center; }
+        table.info { width: 100%; border-collapse: collapse; margin: 20px 0 16px; font-size: 13px; }
+        table.info td { border: none; padding: 4px 0; vertical-align: top; }
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+        .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 40px; }
+        .signatures { margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div style="text-align:center;margin-bottom:20px;">
+        <h1>DELIVERY CHALLAN</h1>
+        <div class="underline"></div>
+        <p class="sub">Noor Hotel PRG</p>
+    </div>
+    <table class="info">
+        <tr>
+            <td style="width:60%;">
+                <strong>Deliver to:</strong> ${s.client}<br/>
+                <strong>Client:</strong> ${s.client}<br/>
+                <strong>PO:</strong> ${s.po_number || '—'}
+            </td>
+            <td style="width:40%;text-align:right;">
+                <strong>Ref:</strong> ${s.ref}<br/>
+                <strong>Delivery Date:</strong> ${s.delivery_date}
+            </td>
+        </tr>
+    </table>
+    <div style="margin-bottom:10px;"><span style="color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Items to be Delivered:</span></div>
+    <table class="items">
+        <thead>
+            <tr>
+                <th style="width:30px;">SL</th>
+                <th>Description</th>
+                <th style="width:80px;text-align:center;">Quantity</th>
+            </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+    </table>
+    ${s.notes ? `<div class="notes"><strong>Note:</strong> ${s.notes}</div>` : ''}
+    <div class="signatures">
+        <table style="width:100%;border:none;">
+            <tr>
+                <td style="width:45%;border:none;text-align:center;padding:0;">
+                    <div style="height:40px;"></div>
+                    <div style="border-top:1px solid #1e293b;"></div>
+                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
+                </td>
+                <td style="width:10%;border:none;"></td>
+                <td style="width:45%;border:none;text-align:center;padding:0;">
+                    <div style="height:40px;"></div>
+                    <div style="border-top:1px solid #1e293b;"></div>
+                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div class="footer">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
+</body>
+</html>`;
+
+            const win = window.open('', '_blank');
+
+            if (win) {
+                win.document.write(html);
+                win.document.close();
+                win.focus();
+
+                setTimeout(() => {
+                    win.focus();
+                    win.print();
+                }, 500);
+            }
+        } catch {
+            toast.error('Failed to load summary challan');
+        }
+    };
+
     const updateChallanItemQty = (idx: number, qty: number) => {
         setChallanItems((prev) =>
             prev.map((it, i) =>
@@ -1876,6 +1991,17 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                                     <Truck className="size-3.5" />
                                                                     Create
                                                                     Challan
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem
+                                                                    onClick={() =>
+                                                                        printSummaryChallans(
+                                                                            p,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <ClipboardList className="size-3.5" />
+                                                                    Summary
+                                                                    Challans
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuSeparator />
                                                                 <DropdownMenuItem
