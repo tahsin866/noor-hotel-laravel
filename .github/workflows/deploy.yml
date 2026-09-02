@@ -46,6 +46,9 @@ jobs:
             set -euo pipefail
             cd /var/www/my-laravel-app
 
+            # Login to GHCR using PAT
+            echo "${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
             # Pull latest image and force re-create containers
             GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml \
               up -d --pull always --force-recreate --remove-orphans
