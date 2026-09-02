@@ -41,15 +41,27 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
+          timeout: 20m
           script: |
+            set -euo pipefail
             cd /var/www/my-laravel-app
-
-            # Login to GHCR using PAT (or GITHUB_TOKEN fallback)
-            echo "${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
             # Pull latest image and force re-create containers
             GITHUB_REPOSITORY="${{ github.repository }}" docker compose -f docker-compose.prod.yml \
               up -d --pull always --force-recreate --remove-orphans
+
+            # Sync freshly built frontend assets from the image to the host (nginx serves these)
+            docker rm -f asset_extract >/dev/null 2>&1 || true
+            docker create --name asset_extract ghcr.io/${{ github.repository }}:latest
+            docker cp asset_extract:/var/www/public/. /var/www/my-laravel-app/public/
+            docker cp asset_extract:/var/www/public/build/. /var/www/my-laravel-app/public_build/
+            docker rm -f asset_extract >/dev/null 2>&1 || true
+            find /var/www/my-laravel-app/public /var/www/my-laravel-app/public_build -type d -exec chmod 755 {} +
+            find /var/www/my-laravel-app/public /var/www/my-laravel-app/public_build -type f -exec chmod 644 {} +
+            docker exec nginx_app nginx -s reload
+
+            # Verify the asset sync actually happened (fail loudly if manifest did not change)
+            md5sum /var/www/my-laravel-app/public_build/manifest.json
 
             # Run Laravel optimization + migrations
             docker exec laravel_app php artisan migrate --force

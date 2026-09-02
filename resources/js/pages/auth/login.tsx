@@ -25,7 +25,7 @@ export default function Login({ status, canResetPassword }: Props) {
                 {/* 1. Centered Header Section */}
                 <div className="flex w-full flex-col items-center justify-center text-center px-4">
                     <h1 className="text-[40px] font-extrabold tracking-tight bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-700 dark:from-emerald-400 dark:via-teal-300 dark:to-emerald-500 bg-clip-text text-transparent whitespace-nowrap text-center">
-                        নুরহোটেল এন্ড রেস্টুরেন্ট এবং কেটারিং সার্ভিস  
+                        নুরহোটেল এন্ড রেস্টুরেন্ট 
                     </h1>
                     <p className="mt-2 text-sm font-medium text-muted-foreground text-center">
                         সাইন-ইন করতে আপনার অ্যাকাউন্ট তথ্য দিন
