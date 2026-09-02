@@ -190,9 +190,9 @@ class ChallanController extends Controller
         ]);
 
         $challan = Challan::findOrFail($id);
-        $wasDispatched = $challan->status === 'dispatched';
+        $wasCounted = in_array($challan->status, ['dispatched', 'delivered'], true);
 
-        if ($wasDispatched) {
+        if ($wasCounted) {
             foreach ($challan->items as $oldItem) {
                 ProductMeal::where('id', $oldItem['product_meal_id'])
                     ->decrement('delivered_quantity', $oldItem['quantity']);
@@ -224,7 +224,7 @@ class ChallanController extends Controller
             ]);
         }
 
-        if ($wasDispatched) {
+        if ($wasCounted) {
             foreach ($request->items as $item) {
                 ProductMeal::where('id', $item['product_meal_id'])
                     ->increment('delivered_quantity', $item['quantity']);
@@ -250,10 +250,10 @@ class ChallanController extends Controller
             }
         }
 
-        if ($challan->status === 'dispatched') {
+        if (in_array($challan->status, ['dispatched', 'delivered'], true)) {
             foreach ($challan->items as $item) {
                 ProductMeal::where('id', $item->product_meal_id)
-                    ->decrement('delivered_quantity', $item->quantity);
+                    ->decrement('delivered_quantity', $item['quantity']);
             }
         }
 
@@ -317,14 +317,16 @@ class ChallanController extends Controller
         if (! $wasCounted && $willBeCounted) {
             foreach ($challan->items as $item) {
                 ProductMeal::where('id', $item->product_meal_id)
-                    ->increment('delivered_quantity', $item->quantity);
+                    ->increment('delivered_quantity', $item['quantity']);
             }
         } elseif ($wasCounted && ! $willBeCounted) {
             foreach ($challan->items as $item) {
                 ProductMeal::where('id', $item->product_meal_id)
-                    ->decrement('delivered_quantity', $item->quantity);
+                    ->decrement('delivered_quantity', $item['quantity']);
             }
         }
+
+        $this->syncLinkedInvoices($challan);
 
         return response()->json(['success' => true, 'message' => 'Challan status updated']);
     }
