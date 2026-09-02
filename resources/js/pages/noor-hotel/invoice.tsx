@@ -256,7 +256,9 @@ export default function Invoices({ parties, products, challans }: { parties: Par
               if (String(p.party_id) !== String(formParty)) return false;
 
               return challans.some(
-                  (c) => c.product_id === p.id && c.status === 'pending',
+                  (c) =>
+                      c.product_id === p.id &&
+                      (c.status === 'pending' || c.status === 'delivered'),
               );
           })
         : [];
@@ -1112,7 +1114,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                     </div>
                                     <div className="max-h-48 space-y-1 overflow-y-auto">
                                         {filteredChallans.length === 0 ? (
-                                            <p className="py-2 text-xs text-muted-foreground">No pending challans for this party{formProduct ? ' and PO' : ''}</p>
+                                            <p className="py-2 text-xs text-muted-foreground">No challans for this party{formProduct ? ' and PO' : ''}</p>
                                         ) : (
                                             filteredChallans.map((c) => (
                                                 <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-md bg-muted/30 p-2 text-sm hover:bg-muted/60">

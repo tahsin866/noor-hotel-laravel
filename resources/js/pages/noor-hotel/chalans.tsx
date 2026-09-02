@@ -1087,8 +1087,11 @@ export default function Challans({
         table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
         table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
         .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
-        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 40px; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 20px; }
         .signatures { margin-top: 30px; }
+        .content-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+        .body-content { flex: 1 0 auto; }
+        .bottom-block { margin-top: auto; }
     </style>
 </head>
 <body>
@@ -1129,24 +1132,26 @@ export default function Challans({
             </table>
             ${c.notes ? `<div class="notes"><strong>Notes:</strong> ${c.notes}</div>` : ''}
         </div>
-        <div class="signatures">
-            <table style="width:100%;border:none;">
-                <tr>
-                    <td style="width:45%;border:none;text-align:center;padding:0;">
-                        <div style="height:40px;"></div>
-                        <div style="border-top:1px solid #1e293b;"></div>
-                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
-                    </td>
-                    <td style="width:10%;border:none;"></td>
-                    <td style="width:45%;border:none;text-align:center;padding:0;">
-                        <div style="height:40px;"></div>
-                        <div style="border-top:1px solid #1e293b;"></div>
-                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
-                    </td>
-                </tr>
-            </table>
+        <div class="bottom-block">
+            <div class="signatures">
+                <table style="width:100%;border:none;">
+                    <tr>
+                        <td style="width:45%;border:none;text-align:center;padding:0;">
+                            <div style="height:40px;"></div>
+                            <div style="border-top:1px solid #1e293b;"></div>
+                            <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
+                        </td>
+                        <td style="width:10%;border:none;"></td>
+                        <td style="width:45%;border:none;text-align:center;padding:0;">
+                            <div style="height:40px;"></div>
+                            <div style="border-top:1px solid #1e293b;"></div>
+                            <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+            <div class="footer">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
         </div>
-                <div class="footer">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
     </div>
 </body>
 </html>`;
@@ -1427,24 +1432,26 @@ export default function Challans({
                                                             </table>
                                                             ${c.notes ? `<div class="notes"><strong>Notes:</strong> ${c.notes}</div>` : ''}
                                                         </div>
-                                                        <div class="signatures">
-                                                            <table style="width:100%;border:none;">
-                                                                <tr>
-                                                                    <td style="width:45%;border:none;text-align:center;padding:0;">
-                                                                        <div style="height:40px;"></div>
-                                                                        <div style="border-top:1px solid #1e293b;"></div>
-                                                                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
-                                                                    </td>
-                                                                    <td style="width:10%;border:none;"></td>
-                                                                    <td style="width:45%;border:none;text-align:center;padding:0;">
-                                                                        <div style="height:40px;"></div>
-                                                                        <div style="border-top:1px solid #1e293b;"></div>
-                                                                        <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
-                                                                    </td>
-                                                                </tr>
-                                                            </table>
-                                                        </div>
+                                                        <div class="bottom-block">
+                                                            <div class="signatures">
+                                                                <table style="width:100%;border:none;">
+                                                                    <tr>
+                                                                        <td style="width:45%;border:none;text-align:center;padding:0;">
+                                                                            <div style="height:40px;"></div>
+                                                                            <div style="border-top:1px solid #1e293b;"></div>
+                                                                            <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
+                                                                        </td>
+                                                                        <td style="width:10%;border:none;"></td>
+                                                                        <td style="width:45%;border:none;text-align:center;padding:0;">
+                                                                            <div style="height:40px;"></div>
+                                                                            <div style="border-top:1px solid #1e293b;"></div>
+                                                                            <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
+                                                                        </td>
+                                                                    </tr>
+                                                                </table>
+                                                            </div>
                 <div class="footer">Generated by M/S Noor Hotel and Restaurant on ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</div>
+                                                        </div>
                                                     </div>
                                                 </div>`;
                                             idx++;
@@ -1470,8 +1477,11 @@ export default function Challans({
         table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
         table.items td { padding: 8px 12px; border: 1px solid #000; }
         .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
-        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 40px; }
+        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 20px; }
         .signatures { margin-top: 30px; }
+        .content-wrapper { display: flex; flex-direction: column; min-height: 100vh; }
+        .body-content { flex: 1 0 auto; }
+        .bottom-block { margin-top: auto; }
         .challan-page { page-break-after: always; }
         .challan-page:last-child { page-break-after: avoid; }
     </style>

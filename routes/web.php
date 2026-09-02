@@ -65,7 +65,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->select('id', 'name', 'code', 'unit', 'party_id', 'customer_po_number')
             ->get();
         $challans = Challan::with(['product', 'product.party', 'items.productMeal'])
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'delivered'])
             ->whereNotIn('id', function ($query) {
                 $query->select('challan_id')->from('invoice_challans');
             })

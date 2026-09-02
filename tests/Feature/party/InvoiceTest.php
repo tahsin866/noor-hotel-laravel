@@ -284,7 +284,7 @@ function actingAsInvoicePageUser($test): void
     $test->actingAs($user);
 }
 
-test('invoices page exposes only pending not-yet-invoiced challans', function () {
+test('invoices page exposes only pending and delivered not-yet-invoiced challans', function () {
     actingAsInvoicePageUser($this);
     $party = Party::factory()->create(['party_name' => 'Pending Client']);
     $p1 = Product::factory()->create(['party_id' => $party->id]);
@@ -335,6 +335,6 @@ test('invoices page exposes only pending not-yet-invoiced challans', function ()
     $ids = $pageChallans->pluck('id');
 
     expect($ids)->toContain($pending->id)
-        ->not->toContain($delivered->id)
+        ->toContain($delivered->id)
         ->not->toContain($invoiced->id);
 });
