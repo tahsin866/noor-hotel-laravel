@@ -1927,6 +1927,18 @@ export default function Challans({
                                                                         Dispatched
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuItem
+                                                                        onClick={() =>
+                                                                            returnToPending(
+                                                                                c.id,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Undo2 className="size-3.5" />
+                                                                        Return
+                                                                        to
+                                                                        Pending
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
                                                                         variant="destructive"
                                                                         onClick={() =>
                                                                             cancelChallan(
