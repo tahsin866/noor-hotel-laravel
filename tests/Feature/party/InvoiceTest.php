@@ -217,7 +217,7 @@ test('invoice index reflects printed status after marking', function () {
     expect($response->json('data.items.0.print_status'))->toBe('printed');
 });
 
-test('invoice items keep each challan line separate with description', function () {
+test('invoice items group identical meal lines across challans', function () {
     $party = Party::factory()->create(['party_name' => 'Split Items Client']);
     $product = Product::factory()->create([
         'party_id' => $party->id,
@@ -256,19 +256,17 @@ test('invoice items keep each challan line separate with description', function 
 
     $invoice = Invoice::query()->first();
 
-    expect($invoice->items->count())->toBe(2);
-    expect($invoice->items->pluck('quantity')->sort()->values()->all())->toBe([26, 30]);
-    expect($invoice->items->pluck('description')->all())->toBe(['Snacks Singara', 'Snacks Singara']);
+    expect($invoice->items->count())->toBe(1);
+    expect($invoice->items->pluck('quantity')->all())->toBe([56]);
+    expect($invoice->items->pluck('description')->all())->toBe(['Snacks Singara']);
 
     $response = $this->get("/api/invoices/{$invoice->id}");
     $response->assertOk();
 
-    $items = collect($response->json('data.items'))->sortBy('quantity')->values();
-    expect($items)->toHaveCount(2);
+    $items = collect($response->json('data.items'))->values();
+    expect($items)->toHaveCount(1);
     expect($items[0]['description'])->toBe('Snacks Singara');
-    expect($items[0]['quantity'])->toBe(26);
-    expect($items[1]['description'])->toBe('Snacks Singara');
-    expect($items[1]['quantity'])->toBe(30);
+    expect($items[0]['quantity'])->toBe(56);
 
     $this->get("/api/invoices/{$invoice->id}/print")->assertOk();
 });

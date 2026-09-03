@@ -97,26 +97,46 @@ class InvoiceController extends Controller
             'challans.product',
             'challans.product.party',
             'challans.items.productMeal',
+            'challans.items.productMeal.product',
         ])->findOrFail($id);
 
-        $items = $invoice->items->map(function ($item) {
-            return [
-                'id' => $item->id,
-                'product_id' => $item->product_id,
-                'product_name' => $item->product->name ?? '-',
-                'description' => $item->description
-                    ?? $item->product->name
-                    ?? '-',
-                'meal_type' => $item->meal_type,
-                'quantity' => (int) $item->quantity,
-                'unit_price' => (float) $item->unit_price,
-                'vat_rate' => (float) $item->vat_rate,
-                'vat_amount' => (float) $item->vat_amount,
-                'total' => (float) $item->total,
-            ];
-        });
+        $challans = $invoice->challans;
+        $builtItems = [];
 
-        $challans = $invoice->challans->map(function ($ch) {
+        if ($challans->isNotEmpty()) {
+            $builtItems = $this->buildItemsFromChallans($challans)['items'];
+        } else {
+            foreach ($invoice->items as $item) {
+                $builtItems[] = [
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product->name ?? '-',
+                    'description' => $item->description ?? $item->product->name ?? '-',
+                    'meal_type' => $item->meal_type,
+                    'quantity' => (int) $item->quantity,
+                    'unit_price' => (float) $item->unit_price,
+                    'vat_rate' => (float) $item->vat_rate,
+                    'vat_amount' => (float) $item->vat_amount,
+                    'total' => (float) $item->total,
+                ];
+            }
+        }
+
+        $items = collect($builtItems)->map(function ($item) {
+            return [
+                'id' => $item['product_id'] ?? null,
+                'product_id' => $item['product_id'] ?? null,
+                'product_name' => $item['product_name'] ?? '-',
+                'description' => $item['description'] ?? $item['product_name'] ?? '-',
+                'meal_type' => $item['meal_type'],
+                'quantity' => (int) ($item['quantity'] ?? 0),
+                'unit_price' => (float) ($item['unit_price'] ?? 0),
+                'vat_rate' => (float) ($item['vat_rate'] ?? 0),
+                'vat_amount' => (float) ($item['vat_amount'] ?? 0),
+                'total' => (float) ($item['total'] ?? 0),
+            ];
+        })->values();
+
+        $challansData = $challans->map(function ($ch) {
             $challanItems = $ch->items->map(function ($ci) {
                 return [
                     'meal_type' => $ci->productMeal->meal_type ?? '-',
@@ -302,7 +322,7 @@ class InvoiceController extends Controller
     {
         $subtotal = 0;
         $totalVat = 0;
-        $items = [];
+        $grouped = [];
 
         foreach ($challans as $challan) {
             foreach ($challan->items as $ci) {
@@ -313,26 +333,42 @@ class InvoiceController extends Controller
 
                 $unitPrice = (float) $ci->unit_price;
                 $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 10);
-                $quantity = (int) $ci->quantity;
-                $lineSubtotal = $quantity * $unitPrice;
-                $vatAmount = round($lineSubtotal * $vatRate / 100, 2);
+                $description = $ci->productMeal->description
+                    ?? $ci->productMeal->product->name
+                    ?? '-';
+                $mealType = $ci->productMeal->meal_type ?? null;
 
-                $items[] = [
+                $key = implode('|', [$productId, $description, (string) $mealType, (string) $unitPrice, (string) $vatRate]);
+
+                if (isset($grouped[$key])) {
+                    $grouped[$key]['quantity'] += (int) $ci->quantity;
+
+                    continue;
+                }
+
+                $grouped[$key] = [
                     'product_id' => $productId,
-                    'description' => $ci->productMeal->description
-                        ?? $ci->productMeal->product->name
-                        ?? '-',
-                    'meal_type' => $ci->productMeal->meal_type ?? null,
-                    'quantity' => $quantity,
+                    'description' => $description,
+                    'meal_type' => $mealType,
+                    'quantity' => (int) $ci->quantity,
                     'unit_price' => $unitPrice,
                     'vat_rate' => $vatRate,
-                    'vat_amount' => $vatAmount,
-                    'total' => $lineSubtotal + $vatAmount,
                 ];
-
-                $subtotal += $lineSubtotal;
-                $totalVat += $vatAmount;
             }
+        }
+
+        $items = [];
+        foreach ($grouped as $g) {
+            $lineSubtotal = $g['quantity'] * $g['unit_price'];
+            $vatAmount = round($lineSubtotal * $g['vat_rate'] / 100, 2);
+
+            $g['vat_amount'] = $vatAmount;
+            $g['total'] = $lineSubtotal + $vatAmount;
+
+            $items[] = $g;
+
+            $subtotal += $lineSubtotal;
+            $totalVat += $vatAmount;
         }
 
         return [
