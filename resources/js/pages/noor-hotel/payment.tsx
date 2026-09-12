@@ -703,7 +703,10 @@ export default function Payments({ parties }: { parties: Party[] }) {
 
         try {
             const formData = new FormData();
-            formData.append('invoice_ids', JSON.stringify(bulkSelected));
+
+            bulkSelected.forEach((id) => {
+                formData.append('invoice_ids[]', String(id));
+            });
 
             if (bulkMethod) {
                 formData.append('payment_method', bulkMethod);
