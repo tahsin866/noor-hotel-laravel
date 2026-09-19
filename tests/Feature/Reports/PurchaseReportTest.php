@@ -1,8 +1,28 @@
 <?php
 
+use App\Models\Challan;
+use App\Models\ChallanItem;
 use App\Models\Party;
 use App\Models\Product;
 use App\Models\ProductMeal;
+
+function purchaseReportChallan(Product $product, array $quantities, string $status = 'delivered'): Challan
+{
+    $challan = Challan::factory()->create([
+        'product_id' => $product->id,
+        'status' => $status,
+    ]);
+
+    foreach ($quantities as $mealId => $quantity) {
+        ChallanItem::factory()->create([
+            'challan_id' => $challan->id,
+            'product_meal_id' => $mealId,
+            'quantity' => $quantity,
+        ]);
+    }
+
+    return $challan;
+}
 
 beforeEach(function () {
     Party::factory()->count(3)->create();
@@ -89,16 +109,18 @@ test('purchase report filters by status delivered', function () {
     $productDelivered = Product::factory()->create(['party_id' => $party->id]);
     $productPending = Product::factory()->create(['party_id' => $party->id]);
 
-    ProductMeal::factory()->create([
+    $mealDelivered = ProductMeal::factory()->create([
         'product_id' => $productDelivered->id,
         'quantity' => 10,
-        'delivered_quantity' => 10,
+        'unit_price' => 50,
     ]);
     ProductMeal::factory()->create([
         'product_id' => $productPending->id,
         'quantity' => 10,
-        'delivered_quantity' => 0,
+        'unit_price' => 50,
     ]);
+
+    purchaseReportChallan($productDelivered, [$mealDelivered->id => 10]);
 
     $response = $this->get('/api/reports/purchase?status=delivered');
 
@@ -113,16 +135,18 @@ test('purchase report filters by status partial', function () {
     $productPartial = Product::factory()->create(['party_id' => $party->id]);
     $productPending = Product::factory()->create(['party_id' => $party->id]);
 
-    ProductMeal::factory()->create([
+    $mealPartial = ProductMeal::factory()->create([
         'product_id' => $productPartial->id,
         'quantity' => 10,
-        'delivered_quantity' => 5,
+        'unit_price' => 50,
     ]);
     ProductMeal::factory()->create([
         'product_id' => $productPending->id,
         'quantity' => 10,
-        'delivered_quantity' => 0,
+        'unit_price' => 50,
     ]);
+
+    purchaseReportChallan($productPartial, [$mealPartial->id => 5]);
 
     $response = $this->get('/api/reports/purchase?status=partial');
 
@@ -140,13 +164,15 @@ test('purchase report filters by status pending', function () {
     ProductMeal::factory()->create([
         'product_id' => $productPending->id,
         'quantity' => 10,
-        'delivered_quantity' => 0,
+        'unit_price' => 50,
     ]);
-    ProductMeal::factory()->create([
+    $mealDelivered = ProductMeal::factory()->create([
         'product_id' => $productDelivered->id,
         'quantity' => 10,
-        'delivered_quantity' => 10,
+        'unit_price' => 50,
     ]);
+
+    purchaseReportChallan($productDelivered, [$mealDelivered->id => 10]);
 
     $response = $this->get('/api/reports/purchase?status=pending');
 
@@ -176,12 +202,13 @@ test('purchase report searches by code name or party', function () {
 test('purchase report summary calculates correctly', function () {
     $party = Party::factory()->create();
     $product = Product::factory()->create(['party_id' => $party->id, 'vat_rate' => 10]);
-    ProductMeal::factory()->create([
+    $meal = ProductMeal::factory()->create([
         'product_id' => $product->id,
         'quantity' => 10,
         'unit_price' => 100,
-        'delivered_quantity' => 5,
     ]);
+
+    purchaseReportChallan($product, [$meal->id => 5]);
 
     $response = $this->get('/api/reports/purchase');
 
@@ -199,12 +226,13 @@ test('purchase report summary calculates correctly', function () {
 test('purchase report splits delivered and remaining amounts', function () {
     $party = Party::factory()->create();
     $product = Product::factory()->create(['party_id' => $party->id, 'vat_rate' => 10]);
-    ProductMeal::factory()->create([
+    $meal = ProductMeal::factory()->create([
         'product_id' => $product->id,
         'quantity' => 3450,
         'unit_price' => 40,
-        'delivered_quantity' => 420,
     ]);
+
+    purchaseReportChallan($product, [$meal->id => 420]);
 
     $response = $this->get('/api/reports/purchase');
 

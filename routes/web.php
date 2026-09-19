@@ -44,12 +44,25 @@ Route::middleware(['auth', 'verified'])->group(function () {
                         ->where('challans.status', '!=', 'cancelled')
                         ->whereNull('challans.deleted_at')
                         ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
+                    'delivered_quantity' => ChallanItem::query()
+                        ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
+                        ->whereColumn('challan_items.product_meal_id', 'product_meals.id')
+                        ->where('challans.status', '!=', 'cancelled')
+                        ->whereNull('challans.deleted_at')
+                        ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
                 ]);
             },
         ])
             ->select('id', 'name', 'code', 'unit', 'party_id')
             ->withSum('meals as total_ordered', 'quantity')
-            ->withSum('meals as total_delivered', 'delivered_quantity')
+            ->addSelect([
+                'total_delivered' => ChallanItem::query()
+                    ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
+                    ->whereColumn('challans.product_id', 'products.id')
+                    ->where('challans.status', '!=', 'cancelled')
+                    ->whereNull('challans.deleted_at')
+                    ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
+            ])
             ->get();
         $parties = Party::select('id', 'party_name')->get();
 

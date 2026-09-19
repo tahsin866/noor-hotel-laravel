@@ -10,6 +10,7 @@ import {
     Paperclip,
     Search,
     RotateCcw,
+    Trash2,
     X,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -349,6 +350,10 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const [partyFilterOpen, setPartyFilterOpen] = useState(false);
     const [partyFilterSearch, setPartyFilterSearch] = useState('');
     const [processing, setProcessing] = useState<number | null>(null);
+    const [selected, setSelected] = useState<number[]>([]);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [deleteIds, setDeleteIds] = useState<number[]>([]);
+    const [deleteBusy, setDeleteBusy] = useState(false);
 
     const [payOpen, setPayOpen] = useState(false);
     const [paying, setPaying] = useState<Invoice | null>(null);
@@ -546,6 +551,78 @@ export default function Payments({ parties }: { parties: Party[] }) {
             toast.error('Something went wrong');
         } finally {
             setProcessing(null);
+        }
+    };
+
+    const toggleAllPage = () => {
+        const pageIds = invoices.map((i) => i.id);
+        const allChecked =
+            pageIds.length > 0 &&
+            pageIds.every((id) => selected.includes(id));
+
+        setSelected((prev) =>
+            allChecked
+                ? prev.filter((id) => !pageIds.includes(id))
+                : Array.from(new Set([...prev, ...pageIds])),
+        );
+    };
+
+    const toggleSelect = (id: number) => {
+        setSelected((prev) =>
+            prev.includes(id)
+                ? prev.filter((x) => x !== id)
+                : [...prev, id],
+        );
+    };
+
+    const openDelete = (ids: number[]) => {
+        setDeleteIds(ids);
+        setDeleteOpen(true);
+    };
+
+    const handleDelete = async () => {
+        if (deleteIds.length === 0) {
+            return;
+        }
+
+        setDeleteBusy(true);
+
+        try {
+            const results = await Promise.all(
+                deleteIds.map((id) =>
+                    fetch(`/api/invoices/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    }),
+                ),
+            );
+
+            const failed = results.filter((r) => !r.ok).length;
+
+            if (failed === 0) {
+                toast.success(
+                    deleteIds.length > 1
+                        ? `${deleteIds.length} invoices deleted`
+                        : 'Invoice deleted',
+                );
+            } else {
+                toast.error(
+                    `${failed} invoice${failed === 1 ? '' : 's'} could not be deleted`,
+                );
+            }
+
+            setDeleteOpen(false);
+            setDeleteIds([]);
+            setSelected((prev) =>
+                prev.filter((id) => !deleteIds.includes(id)),
+            );
+            fetchInvoices();
+        } catch {
+            toast.error('Failed to delete invoice(s)');
+        } finally {
+            setDeleteBusy(false);
         }
     };
 
@@ -946,6 +1023,16 @@ export default function Payments({ parties }: { parties: Party[] }) {
                             <Plus className="mr-1.5 size-4" />
                             Create Payment
                         </Button>
+                        {selected.length > 0 && (
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => openDelete(selected)}
+                            >
+                                <Trash2 className="mr-1.5 size-4" />
+                                Delete Selected ({selected.length})
+                            </Button>
+                        )}
                         <Button
                             variant="outline"
                             size="sm"
@@ -1102,6 +1189,20 @@ export default function Payments({ parties }: { parties: Party[] }) {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-sidebar-border/70 bg-muted/50 dark:border-sidebar-border">
+                                    <th className="w-10 px-4 py-3">
+                                        <input
+                                            type="checkbox"
+                                            checked={
+                                                invoices.length > 0 &&
+                                                invoices.every((i) =>
+                                                    selected.includes(i.id),
+                                                )
+                                            }
+                                            onChange={toggleAllPage}
+                                            className="rounded"
+                                            aria-label="Select all invoices"
+                                        />
+                                    </th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                                         Number
                                     </th>
@@ -1141,7 +1242,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                 {invoices.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={11}
+                                            colSpan={12}
                                             className="px-4 py-16 text-center"
                                         >
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -1158,6 +1259,19 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                             key={inv.id}
                                             className="border-b border-sidebar-border/70 transition-colors last:border-0 hover:bg-muted/30 dark:border-sidebar-border"
                                         >
+                                            <td className="px-4 py-3 text-center">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selected.includes(
+                                                        inv.id,
+                                                    )}
+                                                    onChange={() =>
+                                                        toggleSelect(inv.id)
+                                                    }
+                                                    className="rounded"
+                                                    aria-label={`Select ${inv.invoice_number}`}
+                                                />
+                                            </td>
                                             <td className="px-4 py-3 font-mono text-xs font-semibold">
                                                 {inv.invoice_number}
                                             </td>
@@ -1266,6 +1380,17 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                                         <Share2 className="mr-1 size-3" />
                                                         Share
                                                     </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 text-xs text-red-600 hover:text-red-700"
+                                                        onClick={() =>
+                                                            openDelete([inv.id])
+                                                        }
+                                                    >
+                                                        <Trash2 className="mr-1 size-3" />
+                                                        Delete
+                                                    </Button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -1276,7 +1401,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                 <tfoot>
                                     <tr className="border-t-2 border-sidebar-border/70 bg-muted/30 dark:border-sidebar-border">
                                         <td
-                                            colSpan={4}
+                                            colSpan={5}
                                             className="px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase"
                                         >
                                             Total
@@ -2220,6 +2345,90 @@ export default function Payments({ parties }: { parties: Party[] }) {
                             {bulkProcessing
                                 ? 'Saving...'
                                 : `Record Payment${bulkSelected.length > 1 ? ` (${bulkSelected.length})` : ''}`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                open={deleteOpen}
+                onOpenChange={(v) => {
+                    setDeleteOpen(v);
+
+                    if (!v) {
+                        setDeleteIds([]);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader className="space-y-1 border-b border-border pb-4">
+                        <DialogTitle className="flex items-center gap-2 text-base">
+                            <Trash2 className="size-4.5 text-red-500" />
+                            Delete Invoice{deleteIds.length > 1 ? 's' : ''}
+                        </DialogTitle>
+                        <DialogDescription className="text-xs">
+                            This action cannot be undone. Are you sure you want
+                            to permanently delete{' '}
+                            {deleteIds.length > 1
+                                ? `these ${deleteIds.length} invoices`
+                                : 'this invoice'}
+                            ?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <div className="rounded-lg border border-border bg-muted/30 p-3">
+                            {deleteIds.length === 1 ? (
+                                (() => {
+                                    const inv = invoices.find(
+                                        (i) => i.id === deleteIds[0],
+                                    );
+
+                                    return inv ? (
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-mono text-sm font-semibold">
+                                                {inv.invoice_number}
+                                            </span>
+                                            <span
+                                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                                    statusColors[inv.status] ||
+                                                    'bg-slate-100 text-slate-600'
+                                                }`}
+                                            >
+                                                {statusLabel[inv.status] ||
+                                                    inv.status}
+                                            </span>
+                                        </div>
+                                    ) : null;
+                                })()
+                            ) : (
+                                <p className="text-xs text-muted-foreground">
+                                    {deleteIds.length} invoice
+                                    {deleteIds.length === 1 ? '' : 's'} will be
+                                    permanently deleted.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                    <DialogFooter className="border-t border-border pt-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setDeleteOpen(false);
+                                setDeleteIds([]);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            disabled={deleteBusy}
+                            onClick={handleDelete}
+                            className="min-w-28 bg-red-500 hover:bg-red-600"
+                        >
+                            {deleteBusy
+                                ? 'Deleting…'
+                                : 'Delete Invoice' +
+                                  (deleteIds.length > 1 ? 's' : '')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

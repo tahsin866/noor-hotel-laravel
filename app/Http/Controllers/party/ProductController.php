@@ -20,14 +20,11 @@ class ProductController extends Controller
             ->select('products.*')
             ->leftJoin('parties', 'products.party_id', '=', 'parties.id')
             ->addSelect('parties.party_name')
-            ->with('meals');
+            ->withDeliveredTotals();
 
         $status = $request->get('status');
         $partyId = $request->get('party_id');
         $search = $request->get('search');
-
-        $query->withSum('meals as total_ordered', 'quantity')
-            ->withSum('meals as total_delivered', 'delivered_quantity');
 
         $query->withCount([
             'challans as challans_count' => function ($q) {
@@ -115,7 +112,9 @@ class ProductController extends Controller
             }
         }
 
-        $product->load(['meals', 'party:id,party_name']);
+        $product->load(['meals' => function ($q) {
+            $q->withChallanDelivered();
+        }, 'party:id,party_name']);
         $product->party_name = $product->party->party_name ?? null;
         $product->total_ordered = $product->meals->sum('quantity');
         $product->total_delivered = $product->meals->sum('delivered_quantity');
@@ -135,7 +134,9 @@ class ProductController extends Controller
 
     public function show(Product $product): JsonResponse
     {
-        $product->load(['party:id,party_name', 'meals']);
+        $product->load(['party:id,party_name', 'meals' => function ($q) {
+            $q->withChallanDelivered();
+        }]);
 
         $meals = $product->meals;
         $subtotal = $meals->sum(fn ($m) => $m->quantity * $m->unit_price);
@@ -143,6 +144,7 @@ class ProductController extends Controller
 
         $product->meals_subtotal = $subtotal;
         $product->meals_total = $subtotal + $vat;
+        $product->total_delivered = $meals->sum('delivered_quantity');
 
         return response()->json($product);
     }
@@ -247,7 +249,9 @@ class ProductController extends Controller
 
         $product->meals()->whereNotIn('id', $mealsToKeep)->delete();
 
-        $product->load(['meals', 'party:id,party_name']);
+        $product->load(['meals' => function ($q) {
+            $q->withChallanDelivered();
+        }, 'party:id,party_name']);
         $product->total_ordered = $product->meals->sum('quantity');
         $product->total_delivered = $product->meals->sum('delivered_quantity');
 
@@ -277,7 +281,9 @@ class ProductController extends Controller
 
     public function print(Request $request, Product $product)
     {
-        $product->load(['party:id,party_name', 'meals']);
+        $product->load(['party:id,party_name', 'meals' => function ($q) {
+            $q->withChallanDelivered();
+        }]);
 
         $meals = $product->meals;
         $subtotal = $meals->sum(fn ($m) => $m->quantity * $m->unit_price);

@@ -18,9 +18,7 @@ class PurchaseReportController extends Controller
             ->select('products.*')
             ->leftJoin('parties', 'products.party_id', '=', 'parties.id')
             ->addSelect('parties.party_name')
-            ->with('meals')
-            ->withSum('meals as total_ordered', 'quantity')
-            ->withSum('meals as total_delivered', 'delivered_quantity');
+            ->withDeliveredTotals();
 
         if ($partyId) {
             $query->where('products.party_id', $partyId);
@@ -33,24 +31,6 @@ class PurchaseReportController extends Controller
                     ->orWhere('products.customer_po_number', 'like', "%{$search}%")
                     ->orWhere('parties.party_name', 'like', "%{$search}%");
             });
-        }
-
-        if ($status && $status !== 'all') {
-            if ($status === 'delivered') {
-                $query->whereDoesntHave('meals', function ($q) {
-                    $q->whereColumn('delivered_quantity', '<', 'quantity');
-                })->whereHas('meals');
-            } elseif ($status === 'partial') {
-                $query->whereHas('meals', function ($q) {
-                    $q->where('delivered_quantity', '>', 0);
-                })->whereHas('meals', function ($q) {
-                    $q->whereColumn('delivered_quantity', '<', 'quantity');
-                });
-            } elseif ($status === 'pending') {
-                $query->whereDoesntHave('meals', function ($q) {
-                    $q->where('delivered_quantity', '>', 0);
-                });
-            }
         }
 
         $products = $query->orderByDesc('products.id')->get();
@@ -67,6 +47,11 @@ class PurchaseReportController extends Controller
             $ordered = (int) $product->total_ordered;
             $delivered = (int) $product->total_delivered;
             $remaining = max(0, $ordered - $delivered);
+
+            $hasMeals = $product->meals->isNotEmpty();
+            $fullyDelivered = $hasMeals && $product->meals->every(fn ($m) => (int) $m->delivered_quantity >= (int) $m->quantity);
+            $hasDelivered = $product->meals->contains(fn ($m) => (int) $m->delivered_quantity > 0);
+            $hasRemaining = $product->meals->contains(fn ($m) => (int) $m->delivered_quantity < (int) $m->quantity);
 
             return [
                 'id' => $product->id,
@@ -90,8 +75,26 @@ class PurchaseReportController extends Controller
                 'remaining_vat' => $remainingVat,
                 'remaining_total' => round($remainingSubtotal + $remainingVat, 2),
                 'status' => $this->deliveryStatus($ordered, $delivered),
+                '_hasMeals' => $hasMeals,
+                '_fullyDelivered' => $fullyDelivered,
+                '_hasDelivered' => $hasDelivered,
+                '_hasRemaining' => $hasRemaining,
             ];
         });
+
+        $rows = $rows->filter(function ($row) use ($status) {
+            if (! in_array($status, ['delivered', 'partial', 'pending'], true)) {
+                return true;
+            }
+            if ($status === 'delivered') {
+                return $row['_hasMeals'] && $row['_fullyDelivered'];
+            }
+            if ($status === 'partial') {
+                return $row['_hasDelivered'] && $row['_hasRemaining'];
+            }
+
+            return ! $row['_hasDelivered'];
+        })->values()->map(fn ($row) => array_diff_key($row, array_flip(['_hasMeals', '_fullyDelivered', '_hasDelivered', '_hasRemaining'])));
 
         $summary = [
             'total_orders' => $rows->count(),

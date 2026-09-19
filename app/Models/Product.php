@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -57,6 +58,23 @@ class Product extends Model
     public function challans(): HasMany
     {
         return $this->hasMany(Challan::class);
+    }
+
+    public function scopeWithDeliveredTotals(Builder $query): Builder
+    {
+        return $query
+            ->withSum('meals as total_ordered', 'quantity')
+            ->with(['meals' => function (HasMany $meals): void {
+                $meals->withChallanDelivered();
+            }])
+            ->addSelect([
+                'total_delivered' => ChallanItem::query()
+                    ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
+                    ->whereColumn('challans.product_id', 'products.id')
+                    ->where('challans.status', '!=', 'cancelled')
+                    ->whereNull('challans.deleted_at')
+                    ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
+            ]);
     }
 
     public static function generateCode(): string
