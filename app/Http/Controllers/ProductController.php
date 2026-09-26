@@ -1,39 +1,41 @@
 <?php
 
-namespace App\Http\Controllers\party;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
+use App\Http\Requests\Api\StoreProductRequest;
+use App\Http\Requests\Api\UpdateProductRequest;
+use App\Http\Resources\ProductResource;
+use App\Services\ProductService;
 use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
+    public function __construct(private ProductService $products) {}
+
     public function index(Request $request): JsonResponse
     {
-        $query = Product::query()
+        $partyId = $request->get('party_id');
+        $status = $request->get('status');
+        $search = $request->get('search');
+
+        $query = \App\Models\Product::query()
             ->select('products.*')
             ->leftJoin('parties', 'products.party_id', '=', 'parties.id')
             ->addSelect('parties.party_name')
-            ->withDeliveredTotals();
-
-        $status = $request->get('status');
-        $partyId = $request->get('party_id');
-        $search = $request->get('search');
-
-        $query->withCount([
-            'challans as challans_count' => function ($q) {
-                $q->where('status', '!=', 'cancelled');
-            },
-            'challans as invoiced_challans_count' => function ($q) {
-                $q->whereHas('invoices');
-            },
-        ]);
+            ->withDeliveredTotals()
+            ->withCount([
+                'challans as challans_count' => function ($q) {
+                    $q->where('status', '!=', 'cancelled');
+                },
+                'challans as invoiced_challans_count' => function ($q) {
+                    $q->whereHas('invoices');
+                },
+            ]);
 
         if ($partyId) {
             $query->where('products.party_id', $partyId);
@@ -72,67 +74,52 @@ class ProductController extends Controller
         $products = $query->orderByDesc('products.id')->paginate($limit);
 
         return response()->json([
-            'items' => $products->items(),
+            'items' => ProductResource::collection($products->items()),
             'total' => $products->total(),
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreProductRequest $request, ProductService $productService): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'unit' => 'required|string|max:50',
-            'vat_rate' => 'nullable|numeric',
-            'party_id' => 'nullable|exists:parties,id',
-            'customer_po_number' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'reminder_at' => 'nullable|date',
-            'attachment' => 'nullable|file|max:10240',
-            'meals' => 'required|array|min:1',
-            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snacks,morning_snacks,evening_snacks,hot_meal',
-            'meals.*.quantity' => 'required|integer|min:0',
-            'meals.*.unit_price' => 'required|numeric|min:0',
-            'meals.*.description' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
+        $validated['code'] = \App\Models\Product::generateCode();
 
-        $validated['code'] = Product::generateCode();
-
+        $attachmentPath = null;
         if ($request->hasFile('attachment')) {
-            $validated['attachment_path'] = $request->file('attachment')->store('product-attachments', 'public');
+            $attachmentPath = $request->file('attachment')->store('product-attachments', 'public');
         }
 
-        $meals = $validated['meals'];
-        unset($validated['meals']);
+        $reminderAt = isset($validated['reminder_at']) && $validated['reminder_at'] ? \Carbon\Carbon::parse($validated['reminder_at']) : null;
 
-        $product = Product::create($validated);
+        $dto = new \App\DTOs\CreateProductDTO(
+            code: $validated['code'],
+            name: $validated['name'],
+            unit: $validated['unit'],
+            vatRate: $validated['vat_rate'] ?? null,
+            partyId: $validated['party_id'] ?? null,
+            customerPoNumber: $validated['customer_po_number'] ?? null,
+            description: $validated['description'] ?? null,
+            attachmentPath: $attachmentPath,
+            reminderAt: $reminderAt,
+            meals: $validated['meals'],
+        );
 
-        foreach ($meals as $meal) {
-            if (($meal['quantity'] ?? 0) > 0 || ($meal['unit_price'] ?? 0) > 0) {
-                $product->meals()->create($meal);
-            }
-        }
-
-        $product->load(['meals' => function ($q) {
-            $q->withChallanDelivered();
-        }, 'party:id,party_name']);
-        $product->party_name = $product->party->party_name ?? null;
-        $product->total_ordered = $product->meals->sum('quantity');
-        $product->total_delivered = $product->meals->sum('delivered_quantity');
+        $product = $productService->create($dto);
 
         NotifyAdmins::recordCreated('purchase_order', [
             'code' => $product->code,
             'name' => $product->name,
-            'party' => $product->party_name,
+            'party' => $product->party->party_name ?? '-',
             'amount' => round($product->meals->sum(fn ($m) => $m->quantity * $m->unit_price), 2),
         ]);
 
         return response()->json([
             'message' => 'PO created successfully.',
-            'product' => $product,
+            'product' => new ProductResource($product),
         ], 201);
     }
 
-    public function show(Product $product): JsonResponse
+    public function show(\App\Models\Product $product): JsonResponse
     {
         $product->load(['party:id,party_name', 'meals' => function ($q) {
             $q->withChallanDelivered();
@@ -146,21 +133,51 @@ class ProductController extends Controller
         $product->meals_total = $subtotal + $vat;
         $product->total_delivered = $meals->sum('delivered_quantity');
 
-        return response()->json($product);
+        return response()->json(new ProductResource($product));
     }
 
-    public function summaryChallan(Product $product): JsonResponse
+    public function update(UpdateProductRequest $request, \App\Models\Product $product, ProductService $productService): JsonResponse
+    {
+        $validated = $request->validated();
+        $meals = $validated['meals'];
+        unset($validated['meals']);
+
+        $attachmentPath = null;
+        $removeAttachment = false;
+        if ($request->hasFile('attachment')) {
+            $attachmentPath = $request->file('attachment')->store('product-attachments', 'public');
+        } elseif ($request->boolean('attachment_remove')) {
+            $removeAttachment = true;
+        }
+
+        $product = $productService->update($product, $validated, $meals, $attachmentPath, $removeAttachment);
+
+        return response()->json([
+            'message' => 'PO updated successfully.',
+            'product' => new ProductResource($product),
+        ]);
+    }
+
+    public function destroy(\App\Models\Product $product, ProductService $productService): JsonResponse
+    {
+        $productService->delete($product);
+
+        return response()->json([
+            'message' => 'PO deleted successfully.',
+        ]);
+    }
+
+    public function summaryChallan(\App\Models\Product $product): JsonResponse
     {
         $product->load(['party:id,party_name']);
 
         $year = now()->year;
         $prefix = "Noor/{$year}/CH/";
-        $last = DB::select(
+        $last = \Illuminate\Support\Facades\DB::select(
             'SELECT MAX(CAST(SUBSTR(challan_number, ?) AS INTEGER)) as max_num FROM challans WHERE challan_number LIKE ?',
             [strlen($prefix) + 1, $prefix.'%']
         );
-        $next = max(($last[0]->max_num ?? 0) + 1, 650);
-        $ref = $prefix.str_pad($next, 4, '0', STR_PAD_LEFT);
+        $ref = $prefix.str_pad(max(($last[0]->max_num ?? 0) + 1, 650), 4, '0', STR_PAD_LEFT);
 
         $challans = $product->challans()
             ->where('status', '!=', 'cancelled')
@@ -200,86 +217,7 @@ class ProductController extends Controller
         ]);
     }
 
-    public function update(Request $request, Product $product): JsonResponse
-    {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'unit' => 'required|string|max:50',
-            'vat_rate' => 'nullable|numeric',
-            'party_id' => 'nullable|exists:parties,id',
-            'customer_po_number' => 'nullable|string|max:255',
-            'description' => 'nullable|string',
-            'reminder_at' => 'nullable|date',
-            'attachment' => 'nullable|file|max:10240',
-            'meals' => 'required|array|min:1',
-            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snacks,morning_snacks,evening_snacks,hot_meal',
-            'meals.*.quantity' => 'required|integer|min:0',
-            'meals.*.unit_price' => 'required|numeric|min:0',
-            'meals.*.description' => 'nullable|string',
-        ]);
-
-        $meals = $validated['meals'];
-        unset($validated['meals']);
-
-        if ($request->hasFile('attachment')) {
-            $this->deleteAttachment($product);
-            $validated['attachment_path'] = $request->file('attachment')->store('product-attachments', 'public');
-        } elseif ($request->boolean('attachment_remove')) {
-            $this->deleteAttachment($product);
-            $validated['attachment_path'] = null;
-        }
-
-        $product->update($validated);
-
-        $existingMeals = $product->meals()->get();
-        $mealsToKeep = [];
-
-        foreach ($meals as $index => $meal) {
-            if (($meal['quantity'] ?? 0) <= 0 && ($meal['unit_price'] ?? 0) <= 0) {
-                continue;
-            }
-            if (isset($existingMeals[$index])) {
-                $existingMeals[$index]->update($meal);
-                $mealsToKeep[] = $existingMeals[$index]->id;
-            } else {
-                $new = $product->meals()->create($meal);
-                $mealsToKeep[] = $new->id;
-            }
-        }
-
-        $product->meals()->whereNotIn('id', $mealsToKeep)->delete();
-
-        $product->load(['meals' => function ($q) {
-            $q->withChallanDelivered();
-        }, 'party:id,party_name']);
-        $product->total_ordered = $product->meals->sum('quantity');
-        $product->total_delivered = $product->meals->sum('delivered_quantity');
-
-        return response()->json([
-            'message' => 'PO updated successfully.',
-            'product' => $product,
-        ]);
-    }
-
-    public function destroy(Product $product): JsonResponse
-    {
-        $this->deleteAttachment($product);
-        $product->meals()->delete();
-        $product->delete();
-
-        return response()->json([
-            'message' => 'PO deleted successfully.',
-        ]);
-    }
-
-    private function deleteAttachment(Product $product): void
-    {
-        if ($product->attachment_path) {
-            Storage::disk('public')->delete($product->attachment_path);
-        }
-    }
-
-    public function print(Request $request, Product $product)
+    public function print(Request $request, \App\Models\Product $product)
     {
         $product->load(['party:id,party_name', 'meals' => function ($q) {
             $q->withChallanDelivered();
@@ -308,7 +246,7 @@ class ProductController extends Controller
             'subtotal' => $subtotal,
             'vat' => $vat,
             'total' => $subtotal + $vat,
-            'date' => Carbon::now()->format('d/m/Y'),
+            'date' => \Carbon\Carbon::now()->format('d/m/Y'),
         ];
 
         if ($request->query('download') === '1') {

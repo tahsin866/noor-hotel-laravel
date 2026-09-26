@@ -1160,15 +1160,15 @@ export default function Invoices({ parties, products, challans }: { parties: Par
 
             {/* View Dialog */}
             <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-                <DialogContent className="sm:max-w-2xl">
-                    <DialogHeader className="space-y-1 border-b border-border pb-4">
+                <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+                    <DialogHeader className="shrink-0 space-y-1 border-b border-border px-6 py-4">
                         <DialogTitle className="flex items-center gap-2 text-base">
                             <FileText className="size-4.5 text-muted-foreground" />
                             {viewing?.invoice_number || 'Invoice Details'}
                         </DialogTitle>
                     </DialogHeader>
                     {viewing && (
-                        <div className="space-y-5">
+                        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
                             <div className="grid grid-cols-2 gap-4 text-sm">
                                 <div className="break-words">
                                     <span className="block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Party</span>
@@ -1229,7 +1229,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                             )}
 
                             {viewing.items && viewing.items.length > 0 && (
-                                <div className="overflow-hidden rounded-lg border border-border">
+                                <div className="overflow-x-auto rounded-lg border border-border">
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className="border-b border-border bg-muted/50">
@@ -1244,12 +1244,12 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                         <tbody>
                                             {viewing.items.filter((it) => it.quantity > 0).map((it) => (
                                                 <tr key={it.id} className="border-t border-border first:border-t-0">
-                                                    <td className="px-3 py-2 text-xs">{it.product_name}</td>
+                                                    <td className="px-3 py-2 text-xs break-words">{it.product_name}</td>
                                                     <td className="px-3 py-2 text-xs text-muted-foreground">{it.meal_type || '—'}</td>
                                                     <td className="px-3 py-2 text-right text-xs tabular-nums">{it.quantity}</td>
                                                     <td className="px-3 py-2 text-right text-xs tabular-nums">Tk {fmt$(it.unit_price)}</td>
-                                                    <td className="px-3 py-2 text-right text-xs tabular-nums">{it.vat_rate}% (Tk {fmt$(it.vat_amount)})</td>
-                                                    <td className="px-3 py-2 text-right text-xs font-semibold tabular-nums">Tk {fmt$(it.total)}</td>
+                                                    <td className="px-3 py-2 text-right text-xs whitespace-nowrap tabular-nums">{it.vat_rate}% (Tk {fmt$(it.vat_amount)})</td>
+                                                    <td className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap tabular-nums">Tk {fmt$(it.total)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

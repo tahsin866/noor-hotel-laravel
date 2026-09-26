@@ -80,7 +80,7 @@ class Product extends Model
     public static function generateCode(): string
     {
         $maxNumber = static::withoutGlobalScopes()
-            ->selectRaw('COALESCE(MAX(CAST(SUBSTRING(code FROM 4) AS INTEGER)), 0) AS max_num')
+            ->selectRaw('COALESCE(MAX(CAST(SUBSTR(code, 4) AS INTEGER)), 0) AS max_num')
             ->where('code', 'like', 'PO-%')
             ->value('max_num') ?? 0;
 

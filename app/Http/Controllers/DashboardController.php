@@ -8,21 +8,22 @@ use App\Models\Party;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __invoke()
+    public function __invoke(): Response
     {
-        $totalParties = Party::count();
-        $totalProducts = Product::count();
-        $totalChallans = Challan::count();
-        $deliveredChallans = Challan::where('status', 'delivered')->count();
-        $totalInvoices = Invoice::count();
-        $deliveredAmount = round((float) Challan::where('status', 'delivered')->sum('total_amount'), 2);
-        $dispatchedAmount = round((float) Challan::where('status', 'dispatched')->sum('total_amount'), 2);
-        $totalRevenue = round($deliveredAmount + $dispatchedAmount, 2);
-        $totalPaid = Invoice::sum('amount_paid');
-        $totalDue = round($totalRevenue - $totalPaid, 2);
+        $stats = [
+            'totalParties' => Party::count(),
+            'totalProducts' => Product::count(),
+            'totalChallans' => Challan::count(),
+            'deliveredChallans' => Challan::where('status', 'delivered')->count(),
+            'totalInvoices' => Invoice::count(),
+            'totalRevenue' => round((float) Challan::whereIn('status', ['delivered', 'dispatched'])->sum('total_amount'), 2),
+            'totalPaid' => Invoice::sum('amount_paid'),
+            'totalDue' => round((float) (Challan::whereIn('status', ['delivered', 'dispatched'])->sum('total_amount') - Invoice::sum('amount_paid')), 2),
+        ];
 
         $challanByStatus = Challan::select('status', DB::raw('count(*) as total'))
             ->groupBy('status')
@@ -89,16 +90,7 @@ class DashboardController extends Controller
             ]);
 
         return Inertia::render('dashboard', [
-            'stats' => [
-                'totalParties' => $totalParties,
-                'totalProducts' => $totalProducts,
-                'totalChallans' => $totalChallans,
-                'deliveredChallans' => $deliveredChallans,
-                'totalInvoices' => $totalInvoices,
-                'totalRevenue' => $totalRevenue,
-                'totalPaid' => $totalPaid,
-                'totalDue' => $totalDue,
-            ],
+            'stats' => $stats,
             'challanByStatus' => $challanByStatus,
             'invoiceByStatus' => $invoiceByStatus,
             'monthlyChallans' => $monthlyChallans,

@@ -1,17 +1,17 @@
 <?php
 
+use App\Http\Controllers\ChallanPageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmailedPurchaseOrdersController;
+use App\Http\Controllers\InvoicePageController;
 use App\Http\Controllers\NotificationsController;
-use App\Http\Controllers\TrashController;
-use App\Http\Controllers\party\PartyController;
+use App\Http\Controllers\PaymentPageController;
+use App\Http\Controllers\PoController;
+use App\Http\Controllers\PartyController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RoleController;
+use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UserController;
-use App\Models\Challan;
-use App\Models\ChallanItem;
-use App\Models\Party;
-use App\Models\Product;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -25,137 +25,39 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [PartyController::class, 'store']);
     });
 
-    Route::middleware(['permission:manage_products'])->get('po', function () {
-        $parties = Party::select('id', 'party_name')->get();
+    Route::middleware(['permission:manage_products'])->get('po', PoController::class)->name('po');
 
-        return Inertia::render('noor-hotel/po', [
-            'parties' => $parties,
-        ]);
-    })->name('po');
+    Route::middleware(['permission:manage_challans,print_challans'])->get('chalans', ChallanPageController::class)->name('chalans');
 
-    Route::middleware(['permission:manage_challans,print_challans'])->get('chalans', function () {
-        $products = Product::with([
-            'party',
-            'meals' => function ($query) {
-                $query->addSelect([
-                    'allocated_quantity' => ChallanItem::query()
-                        ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
-                        ->whereColumn('challan_items.product_meal_id', 'product_meals.id')
-                        ->where('challans.status', '!=', 'cancelled')
-                        ->whereNull('challans.deleted_at')
-                        ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
-                    'delivered_quantity' => ChallanItem::query()
-                        ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
-                        ->whereColumn('challan_items.product_meal_id', 'product_meals.id')
-                        ->where('challans.status', '!=', 'cancelled')
-                        ->whereNull('challans.deleted_at')
-                        ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
-                ]);
-            },
-        ])
-            ->select('id', 'name', 'code', 'unit', 'party_id')
-            ->withSum('meals as total_ordered', 'quantity')
-            ->addSelect([
-                'total_delivered' => ChallanItem::query()
-                    ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
-                    ->whereColumn('challans.product_id', 'products.id')
-                    ->where('challans.status', '!=', 'cancelled')
-                    ->whereNull('challans.deleted_at')
-                    ->selectRaw('COALESCE(SUM(challan_items.quantity), 0)'),
-            ])
-            ->get();
-        $parties = Party::select('id', 'party_name')->get();
+    Route::middleware(['permission:manage_invoices'])->get('invoices', InvoicePageController::class)->name('invoices');
 
-        return Inertia::render('noor-hotel/chalans', [
-            'products' => $products,
-            'parties' => $parties,
-        ]);
-    })->name('chalans');
-
-    Route::middleware(['permission:manage_invoices'])->get('invoices', function () {
-        $parties = Party::select('id', 'party_name')->get();
-        $products = Product::with(['party'])
-            ->select('id', 'name', 'code', 'unit', 'party_id', 'customer_po_number')
-            ->get();
-        $challans = Challan::with(['product', 'product.party', 'items.productMeal'])
-            ->whereIn('status', ['pending', 'delivered'])
-            ->whereNotIn('id', function ($query) {
-                $query->select('challan_id')->from('invoice_challans');
-            })
-            ->select('id', 'challan_number', 'product_id', 'date', 'status')
-            ->get()
-            ->map(function ($c) {
-                $items = $c->items->map(function ($item) {
-                    return [
-                        'id' => $item->id,
-                        'meal_type' => $item->productMeal->meal_type ?? '-',
-                        'quantity' => $item->quantity,
-                        'description' => $item->productMeal->description ?? '-',
-                    ];
-                });
-
-                return [
-                    'id' => $c->id,
-                    'challan_number' => $c->challan_number,
-                    'product_id' => $c->product_id,
-                    'product_name' => $c->product->name ?? '-',
-                    'po_number' => $c->product->code ?? '-',
-                    'party_id' => $c->product->party_id ?? null,
-                    'party_name' => $c->product->party->party_name ?? '-',
-                    'date' => $c->date,
-                    'status' => $c->status,
-                    'items' => $items,
-                ];
-            });
-
-        return Inertia::render('noor-hotel/invoice', [
-            'parties' => $parties,
-            'products' => $products,
-            'challans' => $challans,
-        ]);
-    })->name('invoices');
-
-    Route::middleware(['permission:manage_payments'])->get('payments', function () {
-        $parties = Party::select('id', 'party_name')->get();
-
-        return Inertia::render('noor-hotel/payment', [
-            'parties' => $parties,
-        ]);
-    })->name('payments');
+    Route::middleware(['permission:manage_payments'])->get('payments', PaymentPageController::class)->name('payments');
 
     Route::get('report', function () {
         return Inertia::render('noor-hotel/reports/report');
     })->name('report');
 
     Route::get('report/purchase', function () {
-        $parties = Party::select('id', 'party_name')->get();
-
         return Inertia::render('noor-hotel/reports/purchase-report', [
-            'parties' => $parties,
+            'parties' => \App\Models\Party::select('id', 'party_name')->get(),
         ]);
     })->name('report.purchase');
 
     Route::get('report/challan', function () {
-        $parties = Party::select('id', 'party_name')->get();
-
         return Inertia::render('noor-hotel/reports/challan-report', [
-            'parties' => $parties,
+            'parties' => \App\Models\Party::select('id', 'party_name')->get(),
         ]);
     })->name('report.challan');
 
     Route::get('report/invoice', function () {
-        $parties = Party::select('id', 'party_name')->get();
-
         return Inertia::render('noor-hotel/reports/invoice-report', [
-            'parties' => $parties,
+            'parties' => \App\Models\Party::select('id', 'party_name')->get(),
         ]);
     })->name('report.invoice');
 
     Route::get('report/payment', function () {
-        $parties = Party::select('id', 'party_name')->get();
-
         return Inertia::render('noor-hotel/reports/payment-report', [
-            'parties' => $parties,
+            'parties' => \App\Models\Party::select('id', 'party_name')->get(),
         ]);
     })->name('report.payment');
 

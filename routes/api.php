@@ -1,9 +1,9 @@
 <?php
 
-use App\Http\Controllers\party\ChallanController;
-use App\Http\Controllers\party\InvoiceController;
-use App\Http\Controllers\party\PartyController;
-use App\Http\Controllers\party\ProductController;
+use App\Http\Controllers\ChallanController;
+use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\PartyController;
+use App\Http\Controllers\ProductController;
 use App\Http\Controllers\reports\ChallanReportController;
 use App\Http\Controllers\reports\InvoiceReportController;
 use App\Http\Controllers\reports\PaymentReportController;

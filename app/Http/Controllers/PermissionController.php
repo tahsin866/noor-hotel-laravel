@@ -27,7 +27,7 @@ class PermissionController extends Controller
 
         Permission::create([
             'name' => $validated['name'],
-            'guard' => 'web',
+            'guard_name' => 'web',
         ]);
 
         return back()->with('success', 'Permission created successfully.');

@@ -1,20 +1,23 @@
 <?php
 
-namespace App\Http\Controllers\party;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Challan;
-use App\Models\Invoice;
-use App\Models\PaymentHistory;
+use App\Http\Requests\Api\StoreInvoiceRequest;
+use App\Http\Requests\Api\UpdateInvoiceRequest;
+use App\Http\Resources\InvoiceResource;
+use App\Services\InvoiceService;
 use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class InvoiceController extends Controller
 {
-    public function index(Request $request)
+    public function __construct(private InvoiceService $invoices) {}
+
+    public function index(Request $request): JsonResponse
     {
         $page = $request->get('page', 1);
         $limit = $request->get('limit', 10);
@@ -24,21 +27,23 @@ class InvoiceController extends Controller
         $dateTo = $request->get('date_to');
         $search = $request->get('search');
 
-        $query = Invoice::with(['party', 'items.product', 'paymentHistory', 'challans'])
-            ->orderByDesc('created_at');
-
+        $filters = [];
         if ($status) {
-            $query->where('status', $status);
+            $filters['status'] = $status;
         }
         if ($partyId) {
-            $query->where('party_id', $partyId);
+            $filters['party_id'] = $partyId;
         }
         if ($dateFrom) {
-            $query->where('date', '>=', $dateFrom);
+            $filters['date'] = ['>=', $dateFrom];
         }
         if ($dateTo) {
-            $query->where('date', '<=', $dateTo);
+            $filters['date'] = ['<=', $dateTo];
         }
+
+        $query = \App\Models\Invoice::with(['party', 'items.product', 'paymentHistory', 'challans'])
+            ->orderByDesc('created_at');
+
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('invoice_number', 'like', "%{$search}%")
@@ -89,9 +94,9 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function show($id)
+    public function show($id): JsonResponse
     {
-        $invoice = Invoice::with([
+        $invoice = \App\Models\Invoice::with([
             'party',
             'items.product',
             'challans.product',
@@ -100,95 +105,15 @@ class InvoiceController extends Controller
             'challans.items.productMeal.product',
         ])->findOrFail($id);
 
-        $challans = $invoice->challans;
-        $builtItems = [];
-
-        if ($challans->isNotEmpty()) {
-            $builtItems = $this->buildItemsFromChallans($challans)['items'];
-        } else {
-            foreach ($invoice->items as $item) {
-                $builtItems[] = [
-                    'product_id' => $item->product_id,
-                    'product_name' => $item->product->name ?? '-',
-                    'description' => $item->description ?? $item->product->name ?? '-',
-                    'meal_type' => $item->meal_type,
-                    'quantity' => (int) $item->quantity,
-                    'unit_price' => (float) $item->unit_price,
-                    'vat_rate' => (float) $item->vat_rate,
-                    'vat_amount' => (float) $item->vat_amount,
-                    'total' => (float) $item->total,
-                ];
-            }
-        }
-
-        $items = collect($builtItems)->map(function ($item) {
-            return [
-                'id' => $item['product_id'] ?? null,
-                'product_id' => $item['product_id'] ?? null,
-                'product_name' => $item['product_name'] ?? '-',
-                'description' => $item['description'] ?? $item['product_name'] ?? '-',
-                'meal_type' => $item['meal_type'],
-                'quantity' => (int) ($item['quantity'] ?? 0),
-                'unit_price' => (float) ($item['unit_price'] ?? 0),
-                'vat_rate' => (float) ($item['vat_rate'] ?? 0),
-                'vat_amount' => (float) ($item['vat_amount'] ?? 0),
-                'total' => (float) ($item['total'] ?? 0),
-            ];
-        })->values();
-
-        $challansData = $challans->map(function ($ch) {
-            $challanItems = $ch->items->map(function ($ci) {
-                return [
-                    'meal_type' => $ci->productMeal->meal_type ?? '-',
-                    'quantity' => $ci->quantity,
-                    'description' => $ci->productMeal->description ?? '-',
-                ];
-            });
-
-            return [
-                'id' => $ch->id,
-                'challan_number' => $ch->challan_number,
-                'product_id' => $ch->product_id,
-                'product_name' => $ch->product->name ?? '-',
-                'po_number' => $ch->product->code ?? '-',
-                'party_id' => $ch->product->party_id ?? null,
-                'party_name' => $ch->product->party->party_name ?? '-',
-                'challan_date' => $ch->date,
-                'challan_status' => $ch->status,
-                'items' => $challanItems,
-            ];
-        });
-
-        $customerPoNumber = $invoice->items->first()?->product->customer_po_number ?? null;
-
         return response()->json([
             'success' => true,
-            'data' => [
-                'id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'party_id' => $invoice->party_id,
-                'party_name' => $invoice->party->party_name ?? '-',
-                'party_address' => $invoice->party->address ?? '',
-                'date' => $invoice->date,
-                'due_date' => $invoice->due_date,
-                'subtotal' => $invoice->subtotal,
-                'total_vat' => $invoice->total_vat,
-                'total_amount' => $invoice->total_amount,
-                'amount_paid' => $invoice->amount_paid,
-                'amount_due' => $invoice->amount_due,
-                'status' => $invoice->status,
-                'print_status' => $invoice->print_status,
-                'notes' => $invoice->notes,
-                'customer_po_number' => $customerPoNumber,
-                'items' => $items,
-                'challans' => $challans,
-            ],
+            'data' => new InvoiceResource($invoice),
         ]);
     }
 
-    public function destroy($id)
+    public function destroy($id): JsonResponse
     {
-        $invoice = Invoice::findOrFail($id);
+        $invoice = \App\Models\Invoice::findOrFail($id);
         $invoice->items()->delete();
         $invoice->challans()->detach();
         $invoice->paymentHistory()->delete();
@@ -197,56 +122,26 @@ class InvoiceController extends Controller
         return response()->json(['success' => true, 'message' => 'Invoice deleted']);
     }
 
-    public function markPrinted($id)
+    public function markPrinted($id): JsonResponse
     {
-        $invoice = Invoice::findOrFail($id);
+        $invoice = \App\Models\Invoice::findOrFail($id);
         $invoice->update(['print_status' => 'printed']);
 
         return response()->json(['success' => true, 'message' => 'Invoice marked as printed']);
     }
 
-    public function store(Request $request)
+    public function store(StoreInvoiceRequest $request, InvoiceService $invoiceService): JsonResponse
     {
-        $request->validate([
-            'party_id' => 'required|exists:parties,id',
-            'date' => 'required|date',
-            'due_date' => 'required|date',
-            'notes' => 'nullable|string',
-            'challan_ids' => 'required|array|min:1',
-            'challan_ids.*' => 'exists:challans,id',
-        ]);
+        $validated = $request->validated();
 
-        $challanIds = $request->challan_ids;
-        $challans = Challan::with(['product', 'product.party', 'items.productMeal.product'])
-            ->whereIn('id', $challanIds)
-            ->get();
-
-        if ($challans->isEmpty()) {
-            return response()->json(['success' => false, 'message' => 'No valid challans found'], 422);
-        }
-
-        $built = $this->buildItemsFromChallans($challans);
-
-        $totalAmount = $built['total_amount'];
-
-        $invoice = Invoice::create([
-            'party_id' => $request->party_id,
-            'user_id' => $request->user()->id ?? 1,
-            'date' => $request->date,
-            'due_date' => $request->due_date,
-            'subtotal' => round($built['subtotal'], 2),
-            'total_vat' => round($built['total_vat'], 2),
-            'total_amount' => round($totalAmount, 2),
-            'amount_paid' => 0,
-            'amount_due' => round($totalAmount, 2),
-            'notes' => $request->notes,
-        ]);
-
-        foreach ($built['items'] as $item) {
-            $invoice->items()->create($item);
-        }
-
-        $invoice->challans()->attach($challanIds);
+        $invoice = $invoiceService->createFromChallans(
+            $validated['challan_ids'],
+            $validated['party_id'],
+            $request->user()->id ?? 1,
+            $validated['date'],
+            $validated['due_date'],
+            $validated['notes'] ?? null,
+        );
 
         NotifyAdmins::recordCreated('invoice', [
             'invoice_number' => $invoice->invoice_number,
@@ -254,172 +149,40 @@ class InvoiceController extends Controller
             'amount' => round($invoice->total_amount, 2),
         ]);
 
-        return response()->json(['success' => true, 'message' => 'Invoice created']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Invoice created',
+            'data' => new InvoiceResource($invoice),
+        ]);
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateInvoiceRequest $request, $id, InvoiceService $invoiceService): JsonResponse
     {
-        $invoice = Invoice::findOrFail($id);
-
-        $request->validate([
-            'party_id' => 'required|exists:parties,id',
-            'date' => 'required|date',
-            'due_date' => 'required|date',
-            'notes' => 'nullable|string',
-            'challan_ids' => 'required|array|min:1',
-            'challan_ids.*' => 'exists:challans,id',
-        ]);
-
-        $challanIds = $request->challan_ids;
-        $challans = Challan::with(['product', 'product.party', 'items.productMeal.product'])
-            ->whereIn('id', $challanIds)
-            ->get();
-
-        if ($challans->isEmpty()) {
-            return response()->json(['success' => false, 'message' => 'No valid challans found'], 422);
-        }
-
-        $built = $this->buildItemsFromChallans($challans);
+        $validated = $request->validated();
+        $invoice = \App\Models\Invoice::findOrFail($id);
 
         $invoice->update([
-            'party_id' => $request->party_id,
-            'date' => $request->date,
-            'due_date' => $request->due_date,
-            'subtotal' => round($built['subtotal'], 2),
-            'total_vat' => round($built['total_vat'], 2),
-            'total_amount' => round($built['total_amount'], 2),
-            'notes' => $request->notes,
+            'party_id' => $validated['party_id'],
+            'date' => $validated['date'],
+            'due_date' => $validated['due_date'],
+            'notes' => $validated['notes'] ?? null,
         ]);
 
-        $amountPaid = min((float) $invoice->amount_paid, (float) $built['total_amount']);
-        $amountDue = round(max(0, (float) $built['total_amount'] - $amountPaid), 2);
+        $invoice = $invoiceService->updateFromChallans($invoice, $validated['challan_ids']);
 
-        if ($amountDue <= 0) {
-            $status = 'paid';
-        } elseif ($amountPaid > 0) {
-            $status = 'partial';
-        } else {
-            $status = 'pending';
-        }
-
-        $invoice->update([
-            'amount_paid' => round($amountPaid, 2),
-            'amount_due' => $amountDue,
-            'status' => $status,
+        return response()->json([
+            'success' => true,
+            'message' => 'Invoice updated',
+            'data' => new InvoiceResource($invoice),
         ]);
-
-        $invoice->items()->delete();
-        foreach ($built['items'] as $item) {
-            $invoice->items()->create($item);
-        }
-
-        $invoice->challans()->sync($challanIds);
-
-        return response()->json(['success' => true, 'message' => 'Invoice updated']);
     }
 
-    private function buildItemsFromChallans($challans): array
+    public function rebuildFromChallans(\App\Models\Invoice $invoice): void
     {
-        $subtotal = 0;
-        $totalVat = 0;
-        $grouped = [];
-
-        foreach ($challans as $challan) {
-            foreach ($challan->items as $ci) {
-                $productId = $ci->productMeal->product->id ?? null;
-                if (! $productId) {
-                    continue;
-                }
-
-                $unitPrice = (float) $ci->unit_price;
-                $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 10);
-                $description = $ci->productMeal->description
-                    ?? $ci->productMeal->product->name
-                    ?? '-';
-                $mealType = $ci->productMeal->meal_type ?? null;
-
-                $key = implode('|', [$productId, $description, (string) $mealType, (string) $unitPrice, (string) $vatRate]);
-
-                if (isset($grouped[$key])) {
-                    $grouped[$key]['quantity'] += (int) $ci->quantity;
-
-                    continue;
-                }
-
-                $grouped[$key] = [
-                    'product_id' => $productId,
-                    'description' => $description,
-                    'meal_type' => $mealType,
-                    'quantity' => (int) $ci->quantity,
-                    'unit_price' => $unitPrice,
-                    'vat_rate' => $vatRate,
-                ];
-            }
-        }
-
-        $items = [];
-        foreach ($grouped as $g) {
-            $lineSubtotal = $g['quantity'] * $g['unit_price'];
-            $vatAmount = round($lineSubtotal * $g['vat_rate'] / 100, 2);
-
-            $g['vat_amount'] = $vatAmount;
-            $g['total'] = $lineSubtotal + $vatAmount;
-
-            $items[] = $g;
-
-            $subtotal += $lineSubtotal;
-            $totalVat += $vatAmount;
-        }
-
-        return [
-            'subtotal' => $subtotal,
-            'total_vat' => $totalVat,
-            'total_amount' => $subtotal + $totalVat,
-            'items' => $items,
-        ];
+        $this->invoices->rebuildFromChallans($invoice);
     }
 
-    public function rebuildFromChallans(Invoice $invoice): void
-    {
-        $challans = $invoice->challans()
-            ->with(['product', 'product.party', 'items.productMeal.product'])
-            ->get();
-
-        if ($challans->isEmpty()) {
-            return;
-        }
-
-        $built = $this->buildItemsFromChallans($challans);
-
-        $totalAmount = round($built['total_amount'], 2);
-        $amountPaid = min((float) $invoice->amount_paid, $totalAmount);
-        $amountDue = round(max(0, $totalAmount - $amountPaid), 2);
-
-        if ($amountDue <= 0) {
-            $status = 'paid';
-        } elseif ($amountPaid > 0) {
-            $status = 'partial';
-        } else {
-            $status = 'pending';
-        }
-
-        $invoice->update([
-            'subtotal' => round($built['subtotal'], 2),
-            'total_vat' => round($built['total_vat'], 2),
-            'total_amount' => $totalAmount,
-            'amount_paid' => round($amountPaid, 2),
-            'amount_due' => $amountDue,
-            'status' => $status,
-        ]);
-
-        $invoice->items()->delete();
-
-        foreach ($built['items'] as $item) {
-            $invoice->items()->create($item);
-        }
-    }
-
-    public function updateStatus(Request $request, $id)
+    public function updateStatus(Request $request, $id): JsonResponse
     {
         $request->validate([
             'status' => 'required|in:pending,partial,paid,overdue,cancelled',
@@ -436,10 +199,8 @@ class InvoiceController extends Controller
             'reduce_note' => 'nullable|string',
         ]);
 
-        $invoice = Invoice::findOrFail($id);
+        $invoice = \App\Models\Invoice::findOrFail($id);
         $status = $request->status;
-        $amountPaid = (float) $invoice->amount_paid;
-        $amountDue = (float) $invoice->amount_due;
 
         $attachmentPath = null;
         if ($request->hasFile('attachment')) {
@@ -447,15 +208,6 @@ class InvoiceController extends Controller
         }
 
         $reduceAmount = (float) ($request->reduce_amount ?? 0);
-
-        $commonFields = [
-            'payment_status' => $request->payment_status,
-            'customer_bank_name' => $request->customer_bank_name,
-            'user_bank_name' => $request->user_bank_name,
-            'attachment' => $attachmentPath,
-            'reduce_amount' => $reduceAmount > 0 ? $reduceAmount : null,
-            'reduce_note' => $request->reduce_note,
-        ];
 
         if ($status === 'paid') {
             $paymentAmount = (float) $invoice->amount_due - $reduceAmount;
@@ -470,14 +222,22 @@ class InvoiceController extends Controller
                 $status = 'paid';
             }
 
-            PaymentHistory::create(array_merge([
-                'invoice_id' => $invoice->id,
+            $this->invoices->recordPayment($invoice, array_merge([
                 'amount' => $paymentAmount,
                 'payment_date' => $request->payment_date ?? now()->format('Y-m-d'),
                 'payment_method' => $request->payment_method,
                 'reference_number' => $request->reference_number,
                 'notes' => $request->notes,
-            ], $commonFields));
+                'payment_status' => $request->payment_status,
+                'customer_bank_name' => $request->customer_bank_name,
+                'user_bank_name' => $request->user_bank_name,
+                'attachment' => $attachmentPath,
+                'reduce_amount' => $reduceAmount > 0 ? $reduceAmount : null,
+                'reduce_note' => $request->reduce_note,
+            ], $request->only([
+                'payment_method', 'reference_number', 'notes', 'payment_status',
+                'customer_bank_name', 'user_bank_name', 'reduce_note',
+            ])));
 
             NotifyAdmins::recordCreated('payment', [
                 'invoice_number' => $invoice->invoice_number,
@@ -503,14 +263,22 @@ class InvoiceController extends Controller
                 $status = 'partial';
             }
 
-            PaymentHistory::create(array_merge([
-                'invoice_id' => $invoice->id,
+            $this->invoices->recordPayment($invoice, array_merge([
                 'amount' => $paymentAmount,
                 'payment_date' => $request->payment_date ?? now()->format('Y-m-d'),
                 'payment_method' => $request->payment_method,
                 'reference_number' => $request->reference_number,
                 'notes' => $request->notes,
-            ], $commonFields));
+                'payment_status' => $request->payment_status,
+                'customer_bank_name' => $request->customer_bank_name,
+                'user_bank_name' => $request->user_bank_name,
+                'attachment' => $attachmentPath,
+                'reduce_amount' => $reduceAmount > 0 ? $reduceAmount : null,
+                'reduce_note' => $request->reduce_note,
+            ], $request->only([
+                'payment_method', 'reference_number', 'notes', 'payment_status',
+                'customer_bank_name', 'user_bank_name', 'reduce_note',
+            ])));
 
             NotifyAdmins::recordCreated('payment', [
                 'invoice_number' => $invoice->invoice_number,
@@ -524,14 +292,14 @@ class InvoiceController extends Controller
 
         $invoice->update([
             'status' => $status,
-            'amount_paid' => round($amountPaid, 2),
-            'amount_due' => round($amountDue, 2),
+            'amount_paid' => round($amountPaid ?? 0, 2),
+            'amount_due' => round($amountDue ?? 0, 2),
         ]);
 
         return response()->json(['success' => true, 'message' => 'Payment status updated']);
     }
 
-    public function bulkPayment(Request $request)
+    public function bulkPayment(Request $request): JsonResponse
     {
         $request->validate([
             'invoice_ids' => 'required|array|min:1',
@@ -549,7 +317,7 @@ class InvoiceController extends Controller
         ]);
 
         $invoiceIds = array_unique($request->invoice_ids);
-        $invoices = Invoice::whereIn('id', $invoiceIds)->get();
+        $invoices = \App\Models\Invoice::whereIn('id', $invoiceIds)->get();
 
         $payable = $invoices->filter(fn ($inv) => (float) $inv->amount_due > 0)->values();
 
@@ -565,18 +333,6 @@ class InvoiceController extends Controller
         if ($request->hasFile('attachment')) {
             $attachmentPath = $request->file('attachment')->store('payment-attachments', 'public');
         }
-
-        $commonFields = [
-            'payment_date' => $request->payment_date ?? now()->format('Y-m-d'),
-            'payment_method' => $request->payment_method,
-            'reference_number' => $request->reference_number,
-            'notes' => $request->notes,
-            'payment_status' => $request->payment_status,
-            'customer_bank_name' => $request->customer_bank_name,
-            'user_bank_name' => $request->user_bank_name,
-            'attachment' => $attachmentPath,
-            'reduce_note' => $request->reduce_note,
-        ];
 
         $processed = 0;
         $targetStatus = $request->payment_status === 'partial' ? 'partial' : 'paid';
@@ -597,11 +353,22 @@ class InvoiceController extends Controller
             $amountPaid = round((float) $invoice->amount_paid + $paymentAmount, 2);
             $amountDue = round(max(0, (float) $invoice->total_amount - $amountPaid), 2);
 
-            PaymentHistory::create(array_merge([
-                'invoice_id' => $invoice->id,
+            $this->invoices->recordPayment($invoice, array_merge([
                 'amount' => $paymentAmount,
                 'reduce_amount' => $reduceShare > 0 ? $reduceShare : null,
-            ], $commonFields));
+                'payment_date' => $request->payment_date ?? now()->format('Y-m-d'),
+                'payment_method' => $request->payment_method,
+                'reference_number' => $request->reference_number,
+                'notes' => $request->notes,
+                'payment_status' => $request->payment_status,
+                'customer_bank_name' => $request->customer_bank_name,
+                'user_bank_name' => $request->user_bank_name,
+                'attachment' => $attachmentPath,
+                'reduce_note' => $request->reduce_note,
+            ], $request->only([
+                'payment_method', 'reference_number', 'notes', 'payment_status',
+                'customer_bank_name', 'user_bank_name', 'reduce_note',
+            ])));
 
             NotifyAdmins::recordCreated('payment', [
                 'invoice_number' => $invoice->invoice_number,
@@ -624,9 +391,9 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function paymentHistory($id)
+    public function paymentHistory($id): JsonResponse
     {
-        $invoice = Invoice::with(['party', 'paymentHistory'])->findOrFail($id);
+        $invoice = \App\Models\Invoice::with(['party', 'paymentHistory'])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -660,14 +427,14 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function report(Request $request)
+    public function report(Request $request): JsonResponse
     {
         $partyId = $request->get('party_id');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
         $status = $request->get('status');
 
-        $query = Invoice::with(['party', 'paymentHistory'])
+        $query = \App\Models\Invoice::with(['party', 'paymentHistory'])
             ->orderByDesc('created_at');
 
         if ($partyId) {
@@ -726,7 +493,7 @@ class InvoiceController extends Controller
 
     public function print(Request $request, $id)
     {
-        $invoice = Invoice::with([
+        $invoice = \App\Models\Invoice::with([
             'party',
             'items.product',
             'challans.product',
@@ -760,7 +527,7 @@ class InvoiceController extends Controller
             return [
                 'challan_number' => $ch->challan_number,
                 'product_name' => $ch->product->name ?? '-',
-                'date' => Carbon::parse($ch->date)->format('d/m/Y'),
+                'date' => \Carbon\Carbon::parse($ch->date)->format('d/m/Y'),
                 'items' => $challanItems,
             ];
         });

@@ -5,10 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\EmailedPurchaseOrder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Inertia\Response;
 
 class EmailedPurchaseOrdersController extends Controller
 {
-    public function __invoke(Request $request)
+    public function __invoke(Request $request): Response
     {
         $type = $request->query('type');
         $status = $request->query('status');

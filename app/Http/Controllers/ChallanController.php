@@ -1,17 +1,23 @@
 <?php
 
-namespace App\Http\Controllers\party;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\Challan;
-use App\Models\ProductMeal;
+use App\Http\Requests\Api\StoreChallanRequest;
+use App\Http\Requests\Api\UpdateChallanRequest;
+use App\Http\Resources\ChallanResource;
+use App\Services\ChallanService;
 use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ChallanController extends Controller
 {
-    private function syncLinkedInvoices(Challan $challan): void
+    public function __construct(private ChallanService $challans) {}
+
+    private function syncLinkedInvoices(\App\Models\Challan $challan): void
     {
         $invoices = $challan->invoices()->get();
 
@@ -19,14 +25,14 @@ class ChallanController extends Controller
             return;
         }
 
-        $invoiceController = app(InvoiceController::class);
+        $invoiceController = app(\App\Http\Controllers\InvoiceController::class);
 
         foreach ($invoices as $invoice) {
             $invoiceController->rebuildFromChallans($invoice);
         }
     }
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
         $page = $request->get('page', 1);
         $limit = $request->get('limit', 10);
@@ -34,12 +40,14 @@ class ChallanController extends Controller
         $search = $request->get('search');
         $partyId = $request->get('party_id');
 
-        $query = Challan::with(['product', 'product.party', 'user', 'items'])
-            ->orderByDesc('created_at');
-
+        $filters = [];
         if ($status) {
-            $query->where('status', $status);
+            $filters['status'] = $status;
         }
+
+        $query = \App\Models\Challan::query()
+            ->with(['product', 'product.party', 'user', 'items'])
+            ->orderByDesc('created_at');
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -61,8 +69,6 @@ class ChallanController extends Controller
         $items = $query->skip(($page - 1) * $limit)->take($limit)->get();
 
         $items = $items->map(function ($item) {
-            $totalQty = $item->items->sum('quantity');
-
             return [
                 'id' => $item->id,
                 'challan_number' => $item->challan_number,
@@ -75,7 +81,7 @@ class ChallanController extends Controller
                 'address' => $item->address,
                 'notes' => $item->notes,
                 'total_amount' => $item->total_amount,
-                'total_qty' => $totalQty,
+                'total_qty' => $item->items->sum('quantity'),
                 'status' => $item->status,
                 'created_at' => $item->created_at,
             ];
@@ -87,86 +93,42 @@ class ChallanController extends Controller
         ]);
     }
 
-    public function show($id)
+    public function show($id): JsonResponse
     {
-        $challan = Challan::with([
+        $challan = \App\Models\Challan::with([
             'product',
             'product.party',
             'user',
             'items.productMeal',
         ])->findOrFail($id);
 
-        $items = $challan->items->map(function ($item) {
-            return [
-                'id' => $item->id,
-                'product_meal_id' => $item->product_meal_id,
-                'quantity' => $item->quantity,
-                'unit_price' => $item->unit_price,
-                'product_name' => $item->productMeal->product->name ?? '-',
-                'meal_type' => $item->productMeal->meal_type ?? '-',
-                'description' => $item->productMeal->description ?? '-',
-            ];
-        });
-
         return response()->json([
             'success' => true,
-            'data' => [
-                'id' => $challan->id,
-                'challan_number' => $challan->challan_number,
-                'product_id' => $challan->product_id,
-                'product_name' => $challan->product->name ?? '-',
-                'po_number' => $challan->product->code ?? '-',
-                'customer_po_number' => $challan->product->customer_po_number ?? '-',
-                'party_name' => $challan->product->party->party_name ?? '-',
-                'date' => $challan->date,
-                'address' => $challan->address,
-                'notes' => $challan->notes,
-                'total_amount' => $challan->total_amount,
-                'total_qty' => $challan->items->sum('quantity'),
-                'status' => $challan->status,
-                'show_print_date' => $challan->show_print_date,
-                'items' => $items,
-            ],
+            'data' => new ChallanResource($challan),
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreChallanRequest $request, ChallanService $challanService): JsonResponse
     {
-        $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'date' => 'required|date',
-            'address' => 'required|string',
-            'notes' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.product_meal_id' => 'required|exists:product_meals,id',
-            'items.*.quantity' => 'required|numeric|min:0',
-        ]);
+        $validated = $request->validated();
 
         $total = 0;
-        foreach ($request->items as $item) {
-            $meal = ProductMeal::find($item['product_meal_id']);
+        foreach ($validated['items'] as $item) {
+            $meal = \App\Models\ProductMeal::find($item['product_meal_id']);
             $total += ($item['quantity'] * ($meal->unit_price ?? 0));
         }
 
-        $challan = Challan::create([
-            'product_id' => $request->product_id,
-            'user_id' => $request->user()->id ?? 1,
-            'date' => $request->date,
-            'address' => $request->address,
-            'notes' => $request->notes,
-            'total_amount' => $total,
-            'status' => 'pending',
-            'show_print_date' => $request->boolean('show_print_date', true),
-        ]);
+        $dto = new \App\DTOs\CreateChallanDTO(
+            productId: $validated['product_id'],
+            userId: $request->user()->id ?? 1,
+            date: $validated['date'],
+            address: $validated['address'],
+            notes: $validated['notes'] ?? null,
+            items: $validated['items'],
+            showPrintDate: $validated['show_print_date'] ?? true,
+        );
 
-        foreach ($request->items as $item) {
-            $meal = ProductMeal::find($item['product_meal_id']);
-            $challan->items()->create([
-                'product_meal_id' => $item['product_meal_id'],
-                'quantity' => $item['quantity'],
-                'unit_price' => $meal->unit_price ?? 0,
-            ]);
-        }
+        $challan = $challanService->create($dto);
 
         NotifyAdmins::recordCreated('challan', [
             'challan_number' => $challan->challan_number,
@@ -174,71 +136,42 @@ class ChallanController extends Controller
             'amount' => round($total, 2),
         ]);
 
-        return response()->json(['success' => true, 'message' => 'Challan created']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Challan created',
+            'data' => new ChallanResource($challan),
+        ]);
     }
 
-    public function update(Request $request, $id)
+    public function update(UpdateChallanRequest $request, $id, ChallanService $challanService): JsonResponse
     {
-        $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'date' => 'required|date',
-            'address' => 'required|string',
-            'notes' => 'nullable|string',
-            'items' => 'required|array|min:1',
-            'items.*.product_meal_id' => 'required|exists:product_meals,id',
-            'items.*.quantity' => 'required|numeric|min:0',
-        ]);
+        $validated = $request->validated();
+        $challan = \App\Models\Challan::findOrFail($id);
 
-        $challan = Challan::findOrFail($id);
-        $wasCounted = in_array($challan->status, ['dispatched', 'delivered'], true);
+        $dto = new \App\DTOs\CreateChallanDTO(
+            productId: $validated['product_id'],
+            userId: $request->user()->id ?? 1,
+            date: $validated['date'],
+            address: $validated['address'],
+            notes: $validated['notes'] ?? null,
+            items: $validated['items'],
+            showPrintDate: $validated['show_print_date'] ?? true,
+        );
 
-        if ($wasCounted) {
-            foreach ($challan->items as $oldItem) {
-                ProductMeal::where('id', $oldItem['product_meal_id'])
-                    ->decrement('delivered_quantity', $oldItem['quantity']);
-            }
-        }
-
-        $total = 0;
-        foreach ($request->items as $item) {
-            $meal = ProductMeal::find($item['product_meal_id']);
-            $total += ($item['quantity'] * ($meal->unit_price ?? 0));
-        }
-
-        $challan->update([
-            'product_id' => $request->product_id,
-            'date' => $request->date,
-            'address' => $request->address,
-            'notes' => $request->notes,
-            'total_amount' => $total,
-            'show_print_date' => $request->boolean('show_print_date', true),
-        ]);
-
-        $challan->items()->delete();
-        foreach ($request->items as $item) {
-            $meal = ProductMeal::find($item['product_meal_id']);
-            $challan->items()->create([
-                'product_meal_id' => $item['product_meal_id'],
-                'quantity' => $item['quantity'],
-                'unit_price' => $meal->unit_price ?? 0,
-            ]);
-        }
-
-        if ($wasCounted) {
-            foreach ($request->items as $item) {
-                ProductMeal::where('id', $item['product_meal_id'])
-                    ->increment('delivered_quantity', $item['quantity']);
-            }
-        }
+        $challan = $challanService->update($challan, $dto);
 
         $this->syncLinkedInvoices($challan);
 
-        return response()->json(['success' => true, 'message' => 'Challan updated']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Challan updated',
+            'data' => new ChallanResource($challan),
+        ]);
     }
 
-    public function destroy($id)
+    public function destroy($id): JsonResponse
     {
-        $challan = Challan::findOrFail($id);
+        $challan = \App\Models\Challan::findOrFail($id);
         $invoices = $challan->invoices()->get();
 
         foreach ($invoices as $invoice) {
@@ -250,31 +183,22 @@ class ChallanController extends Controller
             }
         }
 
-        if (in_array($challan->status, ['dispatched', 'delivered'], true)) {
-            foreach ($challan->items as $item) {
-                ProductMeal::where('id', $item->product_meal_id)
-                    ->decrement('delivered_quantity', $item['quantity']);
-            }
-        }
-
         $challan->items()->delete();
         $challan->delete();
 
-        $invoiceController = app(InvoiceController::class);
-
         foreach ($invoices as $invoice) {
             $invoice->challans()->detach($challan->id);
-            $invoiceController->rebuildFromChallans($invoice);
+            app(\App\Http\Controllers\InvoiceController::class)->rebuildFromChallans($invoice);
         }
 
         return response()->json(['success' => true, 'message' => 'Challan deleted']);
     }
 
-    public function updateStatus(Request $request, $id)
+    public function updateStatus(Request $request, $id): JsonResponse
     {
         $request->validate(['status' => 'required|in:pending,dispatched,delivered,cancelled']);
 
-        $challan = Challan::findOrFail($id);
+        $challan = \App\Models\Challan::findOrFail($id);
         $previousStatus = $challan->status;
         $newStatus = $request->status;
 
@@ -292,39 +216,37 @@ class ChallanController extends Controller
 
             if (in_array($previousStatus, ['dispatched', 'delivered'], true)) {
                 foreach ($challan->items as $item) {
-                    ProductMeal::where('id', $item->product_meal_id)
+                    \App\Models\ProductMeal::where('id', $item->product_meal_id)
                         ->decrement('delivered_quantity', $item->quantity);
                 }
             }
 
             $challan->update(['status' => $newStatus]);
 
-            $invoiceController = app(InvoiceController::class);
-
             foreach ($invoices as $invoice) {
                 $invoice->challans()->detach($challan->id);
-                $invoiceController->rebuildFromChallans($invoice);
+                app(\App\Http\Controllers\InvoiceController::class)->rebuildFromChallans($invoice);
             }
 
             return response()->json(['success' => true, 'message' => 'Challan status updated']);
         }
-
-        $challan->update(['status' => $newStatus]);
 
         $wasCounted = in_array($previousStatus, ['dispatched', 'delivered'], true);
         $willBeCounted = in_array($newStatus, ['dispatched', 'delivered'], true);
 
         if (! $wasCounted && $willBeCounted) {
             foreach ($challan->items as $item) {
-                ProductMeal::where('id', $item->product_meal_id)
-                    ->increment('delivered_quantity', $item['quantity']);
+                \App\Models\ProductMeal::where('id', $item->product_meal_id)
+                    ->increment('delivered_quantity', $item->quantity);
             }
         } elseif ($wasCounted && ! $willBeCounted) {
             foreach ($challan->items as $item) {
-                ProductMeal::where('id', $item->product_meal_id)
-                    ->decrement('delivered_quantity', $item['quantity']);
+                \App\Models\ProductMeal::where('id', $item->product_meal_id)
+                    ->decrement('delivered_quantity', $item->quantity);
             }
         }
+
+        $challan->update(['status' => $newStatus]);
 
         $this->syncLinkedInvoices($challan);
 
@@ -333,7 +255,7 @@ class ChallanController extends Controller
 
     public function print(Request $request, $id)
     {
-        $challan = Challan::with([
+        $challan = \App\Models\Challan::with([
             'product',
             'product.party',
             'items.productMeal',
@@ -378,7 +300,7 @@ class ChallanController extends Controller
         $request->validate(['ids' => 'required|array|min:1']);
         $request->validate(['ids.*' => 'required|integer|exists:challans,id']);
 
-        $challans = Challan::with(['product', 'product.party', 'items.productMeal'])
+        $challans = \App\Models\Challan::with(['product', 'product.party', 'items.productMeal'])
             ->whereIn('id', $request->ids)
             ->orderBy('id')
             ->get();
