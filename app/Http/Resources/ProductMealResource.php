@@ -12,9 +12,11 @@ class ProductMealResource extends JsonResource
         return [
             'id' => $this->id,
             'meal_type' => $this->meal_type,
-            'quantity' => $this->quantity,
-            'unit_price' => $this->unit_price,
-            'delivered_quantity' => $this->delivered_quantity,
+            'quantity' => (int) $this->quantity,
+            'unit_price' => (float) $this->unit_price,
+            'delivered_quantity' => (int) $this->delivered_quantity,
+            'remaining' => (int) $this->remaining,
+            'over_delivered' => (int) $this->over_delivered,
             'description' => $this->description,
         ];
     }

@@ -129,9 +129,10 @@ class ProductController extends Controller
         $subtotal = $meals->sum(fn ($m) => $m->quantity * $m->unit_price);
         $vat = round($subtotal * $product->vat_rate / 100, 2);
 
+        $product->total_ordered = (int) $meals->sum('quantity');
         $product->meals_subtotal = $subtotal;
         $product->meals_total = $subtotal + $vat;
-        $product->total_delivered = $meals->sum('delivered_quantity');
+        $product->total_delivered = (int) $meals->sum('delivered_quantity');
 
         return response()->json(new ProductResource($product));
     }
@@ -234,7 +235,8 @@ class ProductController extends Controller
                 'unit_price' => $m->unit_price,
                 'total' => $m->quantity * $m->unit_price,
                 'delivered_quantity' => $m->delivered_quantity ?? 0,
-                'remaining' => max(0, $m->quantity - ($m->delivered_quantity ?? 0)),
+                'remaining' => $m->remaining,
+                'over_delivered' => $m->over_delivered,
                 'description' => $m->description ?? '-',
             ];
         });
@@ -243,6 +245,8 @@ class ProductController extends Controller
             'product' => $product,
             'party_name' => $product->party->party_name ?? '-',
             'items' => $items,
+            'total_remaining' => $product->totalRemaining(),
+            'total_over_delivered' => $product->totalOverDelivered(),
             'subtotal' => $subtotal,
             'vat' => $vat,
             'total' => $subtotal + $vat,

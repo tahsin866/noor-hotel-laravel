@@ -23,6 +23,7 @@ class UpdateProductRequest extends FormRequest
             'reminder_at' => 'nullable|date',
             'attachment' => 'nullable|file|max:10240',
             'meals' => 'required|array|min:1',
+            'meals.*.id' => 'nullable|integer|exists:product_meals,id',
             'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snacks,morning_snacks,evening_snacks,hot_meal',
             'meals.*.quantity' => 'required|integer|min:0',
             'meals.*.unit_price' => 'required|numeric|min:0',

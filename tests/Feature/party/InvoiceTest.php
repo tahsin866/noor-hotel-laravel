@@ -271,6 +271,68 @@ test('invoice items group identical meal lines across challans', function () {
     $this->get("/api/invoices/{$invoice->id}/print")->assertOk();
 });
 
+test('invoice items keep duplicate meals separate when product_meal_id differs', function () {
+    actingAsInvoicePageUser($this);
+    $party = Party::factory()->create(['party_name' => 'Duplicate Meal Client']);
+    $product = Product::factory()->create([
+        'party_id' => $party->id,
+        'vat_rate' => 0,
+    ]);
+
+    $mealA = ProductMeal::factory()->create([
+        'product_id' => $product->id,
+        'meal_type' => 'lunch',
+        'unit_price' => 460,
+        'description' => 'Menu 08',
+    ]);
+    $mealB = ProductMeal::factory()->create([
+        'product_id' => $product->id,
+        'meal_type' => 'lunch',
+        'unit_price' => 460,
+        'description' => 'Menu 08',
+    ]);
+
+    $challan1 = Challan::factory()->create(['product_id' => $product->id, 'status' => 'delivered']);
+    ChallanItem::factory()->create([
+        'challan_id' => $challan1->id,
+        'product_meal_id' => $mealA->id,
+        'quantity' => 10,
+        'unit_price' => 460,
+    ]);
+
+    $challan2 = Challan::factory()->create(['product_id' => $product->id, 'status' => 'delivered']);
+    ChallanItem::factory()->create([
+        'challan_id' => $challan2->id,
+        'product_meal_id' => $mealB->id,
+        'quantity' => 12,
+        'unit_price' => 460,
+    ]);
+
+    $this->post('/api/invoices', [
+        'party_id' => $party->id,
+        'date' => '2026-01-11',
+        'due_date' => '2026-02-11',
+        'notes' => null,
+        'challan_ids' => [$challan1->id, $challan2->id],
+    ])->assertOk();
+
+    $invoice = Invoice::query()->first();
+
+    expect($invoice->items->count())->toBe(2);
+    expect($invoice->items->pluck('quantity')->all())->toBe([10, 12]);
+    expect($invoice->items->pluck('description')->all())->toBe(['Menu 08', 'Menu 08']);
+
+    $response = $this->get("/api/invoices/{$invoice->id}");
+    $response->assertOk();
+
+    $items = collect($response->json('data.items'))->values();
+    expect($items)->toHaveCount(2);
+    expect($items[0]['description'])->toBe('Menu 08');
+    expect($items[0]['quantity'])->toBe(10);
+    expect($items[1]['description'])->toBe('Menu 08');
+    expect($items[1]['quantity'])->toBe(12);
+});
+
 function actingAsInvoicePageUser($test): void
 {
     $permission = Permission::firstOrCreate(['name' => 'manage_invoices']);

@@ -1160,7 +1160,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
 
             {/* View Dialog */}
             <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-                <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+                <DialogContent className="flex max-h-[85vh] w-[95vw] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
                     <DialogHeader className="shrink-0 space-y-1 border-b border-border px-6 py-4">
                         <DialogTitle className="flex items-center gap-2 text-base">
                             <FileText className="size-4.5 text-muted-foreground" />
@@ -1233,7 +1233,8 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                     <table className="w-full text-sm">
                                         <thead>
                                             <tr className="border-b border-border bg-muted/50">
-                                                <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Product</th>
+                                                <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">PO</th>
+                                                <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Item Description</th>
                                                 <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Meal</th>
                                                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Qty</th>
                                                 <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Price</th>
@@ -1243,11 +1244,12 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                         </thead>
                                         <tbody>
                                             {viewing.items.filter((it) => it.quantity > 0).map((it) => (
-                                                <tr key={it.id} className="border-t border-border first:border-t-0">
+                                                <tr key={it.id} className="border-t border-border align-top first:border-t-0">
                                                     <td className="px-3 py-2 text-xs break-words">{it.product_name}</td>
-                                                    <td className="px-3 py-2 text-xs text-muted-foreground">{it.meal_type || '—'}</td>
+                                                    <td className="px-3 py-2 text-xs whitespace-pre-line break-words text-muted-foreground">{it.description || '—'}</td>
+                                                    <td className="px-3 py-2 text-xs whitespace-nowrap text-muted-foreground">{it.meal_type || '—'}</td>
                                                     <td className="px-3 py-2 text-right text-xs tabular-nums">{it.quantity}</td>
-                                                    <td className="px-3 py-2 text-right text-xs tabular-nums">Tk {fmt$(it.unit_price)}</td>
+                                                    <td className="px-3 py-2 text-right text-xs whitespace-nowrap tabular-nums">Tk {fmt$(it.unit_price)}</td>
                                                     <td className="px-3 py-2 text-right text-xs whitespace-nowrap tabular-nums">{it.vat_rate}% (Tk {fmt$(it.vat_amount)})</td>
                                                     <td className="px-3 py-2 text-right text-xs font-semibold whitespace-nowrap tabular-nums">Tk {fmt$(it.total)}</td>
                                                 </tr>

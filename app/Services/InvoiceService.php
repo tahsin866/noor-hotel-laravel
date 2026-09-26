@@ -170,6 +170,17 @@ class InvoiceService
         return $payment;
     }
 
+    /**
+     * Build the invoice lines that the given challans would produce, without persisting anything.
+     *
+     * @param  \Illuminate\Support\Collection<int, Challan>  $challans
+     * @return array{items: array<int, array<string, mixed>>, subtotal: float, total_vat: float, total_amount: float}
+     */
+    public function buildItemsPreview($challans): array
+    {
+        return $this->buildItemsFromChallans($challans);
+    }
+
     private function buildItemsFromChallans($challans): array
     {
         $subtotal = 0;
@@ -178,19 +189,23 @@ class InvoiceService
 
         foreach ($challans as $challan) {
             foreach ($challan->items as $ci) {
+                if ((int) ($ci->quantity ?? 0) <= 0) {
+                    continue;
+                }
+
                 $productId = $ci->productMeal->product->id ?? null;
                 if (!$productId) {
                     continue;
                 }
 
-                $unitPrice = (float) $ci->unit_price;
+                $unitPrice = (float) ($ci->productMeal->unit_price ?? $ci->unit_price);
                 $vatRate = (float) ($ci->productMeal->product->vat_rate ?? 10);
                 $description = $ci->productMeal->description
                     ?? $ci->productMeal->product->name
                     ?? '-';
                 $mealType = $ci->productMeal->meal_type ?? null;
 
-                $key = implode('|', [$productId, $description, (string) $mealType, (string) $unitPrice, (string) $vatRate]);
+                $key = implode('|', [(string) ($ci->product_meal_id ?? $ci->id), (string) $mealType]);
 
                 if (isset($grouped[$key])) {
                     $grouped[$key]['quantity'] += (int) $ci->quantity;

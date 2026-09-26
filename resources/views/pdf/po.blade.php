@@ -79,7 +79,7 @@
                 <td style="text-align:right;">Tk {{ fmtPrice($item['unit_price']) }}</td>
                 <td style="text-align:right;font-weight:bold;">Tk {{ fmtPrice($item['total']) }}</td>
                 <td style="text-align:center;">{{ $item['delivered_quantity'] }}</td>
-                <td style="text-align:center;">{{ $item['remaining'] }}</td>
+                <td style="text-align:center;">{{ $item['over_delivered'] > 0 ? '-'.$item['over_delivered'] : $item['remaining'] }}</td>
                 <td>{{ $item['description'] }}</td>
             </tr>
             @endforeach
@@ -87,6 +87,10 @@
     </table>
 
     <div class="totals">
+        <div>Remaining: <strong>{{ $total_remaining }}</strong></div>
+        @if($total_over_delivered > 0)
+        <div>Over-delivered: <strong>{{ $total_over_delivered }}</strong></div>
+        @endif
         <div>Subtotal: <strong>Tk {{ fmtPrice($subtotal) }}</strong></div>
         <div>VAT ({{ $product->vat_rate }}%): <strong>Tk {{ fmtPrice($vat) }}</strong></div>
         <div class="grand">Total (inc. VAT): <strong>Tk {{ fmtPrice($total) }}</strong></div>

@@ -51,17 +51,20 @@ class ProductService
 
         $updated = $this->products->update($product, $data);
 
-        $existingMeals = $product->meals()->get();
+        $existingMeals = $product->meals()->get()->keyBy('id');
         $mealsToKeep = [];
 
-        foreach ($meals as $index => $meal) {
+        foreach ($meals as $meal) {
             if (($meal['quantity'] ?? 0) <= 0 && ($meal['unit_price'] ?? 0) <= 0) {
                 continue;
             }
 
-            if (isset($existingMeals[$index])) {
-                $existingMeals[$index]->update($meal);
-                $mealsToKeep[] = $existingMeals[$index]->id;
+            $mealId = $meal['id'] ?? null;
+
+            if ($mealId !== null && $existingMeals->has($mealId)) {
+                $existing = $existingMeals->get($mealId);
+                $existing->fill($meal)->save();
+                $mealsToKeep[] = $existing->id;
             } else {
                 $new = $product->meals()->create($meal);
                 $mealsToKeep[] = $new->id;

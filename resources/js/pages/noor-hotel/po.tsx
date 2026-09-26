@@ -62,6 +62,8 @@ type ProductMeal = {
     quantity: number;
     unit_price: number;
     delivered_quantity: number;
+    remaining: number;
+    over_delivered: number;
     description: string;
 };
 
@@ -83,12 +85,15 @@ type Product = {
     meals: ProductMeal[];
     total_ordered: number;
     total_delivered: number;
+    total_remaining?: number | null;
+    total_over_delivered?: number | null;
     meals_subtotal?: number;
     challans_count?: number;
     invoiced_challans_count?: number;
 };
 
 type MealRow = {
+    id?: number;
     meal_type: string;
     quantity: number;
     unit_price: number;
@@ -797,6 +802,21 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [now] = useState(() => Date.now());
 
+    const viewRemaining =
+        viewingProduct?.total_remaining ??
+        (viewingProduct?.meals ?? []).reduce(
+            (s, m) => s + (m.remaining ?? 0),
+            0,
+        );
+    const viewOverDelivered =
+        viewingProduct?.total_over_delivered ??
+        (viewingProduct?.meals ?? []).reduce(
+            (s, m) => s + (m.over_delivered ?? 0),
+            0,
+        );
+    const viewNetRemaining =
+        viewingProduct?.net_remaining ?? viewRemaining - viewOverDelivered;
+
     const [challanProduct, setChallanProduct] = useState<Product | null>(null);
     const [challanDate, setChallanDate] = useState(
         new Date().toISOString().slice(0, 10),
@@ -919,6 +939,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             setMeals(
                 p.meals?.length
                     ? p.meals.map((m: ProductMeal) => ({
+                          id: m.id,
                           meal_type: m.meal_type,
                           quantity: m.quantity,
                           unit_price: m.unit_price,
@@ -977,10 +998,8 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             const itemRows = meals
                 .map((m: ProductMeal, i: number) => {
                     const lineTotal = m.quantity * m.unit_price;
-                    const remaining = Math.max(
-                        0,
-                        m.quantity - (m.delivered_quantity || 0),
-                    );
+                    const remaining = m.remaining ?? 0;
+                    const overDelivered = m.over_delivered ?? 0;
 
                     return `<tr>
                         <td style="padding:8px 12px;border:1px solid #e2e8f0;">${i + 1}</td>
@@ -989,11 +1008,22 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                         <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;">Tk ${Number(m.unit_price).toFixed(2)}</td>
                         <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;">Tk ${lineTotal.toFixed(2)}</td>
                         <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${m.delivered_quantity || 0}</td>
-                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${remaining}</td>
+                        <td style="padding:8px 12px;border:1px solid #e2e8f0;text-align:center;">${overDelivered > 0 ? `-${overDelivered}` : remaining}</td>
                         <td style="padding:8px 12px;border:1px solid #e2e8f0;">${m.description || '-'}</td>
                     </tr>`;
                 })
                 .join('');
+
+            const totalRemaining = meals.reduce(
+                (s: number, m: ProductMeal) => s + (m.remaining ?? 0),
+                0,
+            );
+            const totalOverDelivered = meals.reduce(
+                (s: number, m: ProductMeal) => s + (m.over_delivered ?? 0),
+                0,
+            );
+            const netRemaining = totalRemaining - totalOverDelivered;
+            const remainingLabel = netRemaining > 0 ? `Remaining: <strong>${netRemaining}</strong>` : netRemaining < 0 ? `Over-delivered: <strong>${Math.abs(netRemaining)}</strong>` : `Fully delivered`;
 
             const html = `<!DOCTYPE html>
 <html>
@@ -1051,8 +1081,9 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         </thead>
         <tbody>${itemRows}</tbody>
     </table>
-    <div class="totals">
-        <div>Subtotal: <strong>Tk ${subtotal.toFixed(2)}</strong></div>
+        <div class="totals">
+            <div>${remainingLabel}</div>
+            <div>Subtotal: <strong>Tk ${subtotal.toFixed(2)}</strong></div>
         <div>VAT (${vatRate}%): <strong>Tk ${vat.toFixed(2)}</strong></div>
         <div class="grand">Total (inc. VAT): <strong>Tk ${total.toFixed(2)}</strong></div>
     </div>
@@ -1134,6 +1165,10 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             (m) => m.quantity > 0 || m.unit_price > 0 || m.description,
         );
         validMeals.forEach((m, i) => {
+            if (m.id) {
+                fd.append(`meals[${i}][id]`, String(m.id));
+            }
+
             fd.append(`meals[${i}][meal_type]`, m.meal_type);
             fd.append(`meals[${i}][quantity]`, String(m.quantity));
             fd.append(`meals[${i}][unit_price]`, String(m.unit_price));
@@ -1752,6 +1787,9 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                                         Remaining
                                     </th>
+                                    <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Over
+                                    </th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                                         Status
                                     </th>
@@ -1767,7 +1805,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                 {products.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={10}
+                                            colSpan={11}
                                             className="px-4 py-16 text-center"
                                         >
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -1787,10 +1825,14 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                         const ordered = p.total_ordered || 0;
                                         const delivered =
                                             p.total_delivered || 0;
-                                        const remaining = Math.max(
-                                            0,
-                                            ordered - delivered,
-                                        );
+                                        const remaining =
+                                            p.total_remaining ??
+                                            Math.max(
+                                                0,
+                                                ordered - delivered,
+                                            );
+                                        const overDelivered =
+                                            p.total_over_delivered ?? 0;
                                         const status = getDeliveryStatus(p);
                                         const pct =
                                             ordered > 0
@@ -1860,6 +1902,18 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                     className={`px-4 py-3 text-right text-xs tabular-nums ${remaining > 0 ? 'font-medium text-red-600' : 'text-muted-foreground'}`}
                                                 >
                                                     {remaining}
+                                                </td>
+                                                <td
+                                                    className={`px-4 py-3 text-right text-xs tabular-nums ${overDelivered > 0 ? 'font-medium text-amber-600' : 'text-muted-foreground'}`}
+                                                    title={
+                                                        overDelivered > 0
+                                                            ? 'Delivered more than ordered'
+                                                            : undefined
+                                                    }
+                                                >
+                                                    {overDelivered > 0
+                                                        ? overDelivered
+                                                        : '—'}
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     <div className="flex flex-col gap-1.5">
@@ -2276,12 +2330,10 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                     const line =
                                                         m.quantity *
                                                         m.unit_price;
-                                                    const remaining = Math.max(
-                                                        0,
-                                                        m.quantity -
-                                                            (m.delivered_quantity ||
-                                                                0),
-                                                    );
+                                                    const remaining =
+                                                        m.remaining ?? 0;
+                                                    const overDelivered =
+                                                        m.over_delivered ?? 0;
 
                                                     return (
                                                         <tr
@@ -2309,9 +2361,18 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                                     0}
                                                             </td>
                                                             <td
-                                                                className={`px-3 py-2 text-right text-xs tabular-nums ${remaining > 0 ? 'font-medium text-red-600' : 'text-muted-foreground'}`}
+                                                                className={`px-3 py-2 text-right text-xs tabular-nums ${remaining > 0 ? 'font-medium text-red-600' : overDelivered > 0 ? 'font-medium text-amber-600' : 'text-muted-foreground'}`}
+                                                                title={
+                                                                    overDelivered >
+                                                                    0
+                                                                        ? 'Delivered more than ordered'
+                                                                        : undefined
+                                                                }
                                                             >
-                                                                {remaining}
+                                                                {overDelivered >
+                                                                0
+                                                                    ? `-${overDelivered}`
+                                                                    : remaining}
                                                             </td>
                                                             <td className="max-w-[180px] px-3 py-2 text-xs break-words text-muted-foreground">
                                                                 {m.description ||
@@ -2323,7 +2384,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                             )}
                                         </tbody>
                                     </table>
-                                    <div className="flex items-center justify-between border-t border-border bg-muted/40 px-3 py-2.5">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2.5">
                                         <span className="text-xs text-muted-foreground">
                                             {viewingProduct.meals.length} item
                                             {viewingProduct.meals.length === 1
@@ -2338,18 +2399,36 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                             {viewingProduct.meals.reduce(
                                                 (s, m) =>
                                                     s +
-                                                    (m.delivered_quantity || 0),
+                                                    (m.delivered_quantity ||
+                                                        0),
                                                 0,
                                             )}{' '}
                                             delivered
                                         </span>
-                                        <span className="text-sm font-bold tabular-nums">
-                                            Subtotal: Tk{' '}
-                                            {(
-                                                viewingProduct.meals_subtotal ||
-                                                0
-                                            ).toFixed(2)}
-                                        </span>
+                                        <div className="flex flex-wrap items-center gap-3 text-xs">
+                                            <span
+                                                className={
+                                                    viewNetRemaining > 0
+                                                        ? 'font-medium text-red-600'
+                                                        : viewNetRemaining < 0
+                                                          ? 'font-medium text-amber-600'
+                                                          : 'text-emerald-600'
+                                                }
+                                            >
+                                                {viewNetRemaining > 0
+                                                    ? `${viewNetRemaining} remaining`
+                                                    : viewNetRemaining < 0
+                                                      ? `${Math.abs(viewNetRemaining)} over-delivered`
+                                                      : 'Fully delivered'}
+                                            </span>
+                                            <span className="text-sm font-bold tabular-nums">
+                                                Subtotal: Tk{' '}
+                                                {(
+                                                    viewingProduct.meals_subtotal ||
+                                                    0
+                                                ).toFixed(2)}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             )}

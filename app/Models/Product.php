@@ -86,4 +86,21 @@ class Product extends Model
 
         return 'PO-'.str_pad($maxNumber + 1, 4, '0', STR_PAD_LEFT);
     }
+
+    /**
+     * Units still undelivered, summed per meal so a short row is never
+     * hidden by an over-delivery on another row.
+     */
+    public function totalRemaining(): int
+    {
+        return (int) $this->meals->sum(fn (ProductMeal $meal): int => $meal->remaining);
+    }
+
+    /**
+     * Units delivered beyond the ordered quantity, summed per meal.
+     */
+    public function totalOverDelivered(): int
+    {
+        return (int) $this->meals->sum(fn (ProductMeal $meal): int => $meal->over_delivered);
+    }
 }

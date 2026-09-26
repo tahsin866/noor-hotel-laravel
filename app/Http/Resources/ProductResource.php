@@ -21,8 +21,23 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'attachment_url' => $this->attachment_url,
             'reminder_at' => $this->reminder_at,
-            'total_ordered' => $this->total_ordered,
-            'total_delivered' => $this->total_delivered,
+            'total_ordered' => (int) $this->total_ordered,
+            'total_delivered' => (int) $this->total_delivered,
+            'total_remaining' => $this->relationLoaded('meals')
+                ? $this->totalRemaining()
+                : null,
+            'total_over_delivered' => $this->relationLoaded('meals')
+                ? $this->totalOverDelivered()
+                : null,
+            'net_remaining' => $this->relationLoaded('meals')
+                ? (int) ($this->totalRemaining() - $this->totalOverDelivered())
+                : null,
+            'meals_subtotal' => $this->meals_subtotal !== null
+                ? (float) $this->meals_subtotal
+                : null,
+            'meals_total' => $this->meals_total !== null
+                ? (float) $this->meals_total
+                : null,
             'challans_count' => $this->challans_count,
             'invoiced_challans_count' => $this->invoiced_challans_count,
             'meals' => ProductMealResource::collection($this->whenLoaded('meals')),
