@@ -123,16 +123,14 @@ class ProductController extends Controller
     {
         $product->load(['party:id,party_name', 'meals' => function ($q) {
             $q->withChallanDelivered();
-        }]);
+        }])->loadDeliveryTotals();
 
         $meals = $product->meals;
         $subtotal = $meals->sum(fn ($m) => $m->quantity * $m->unit_price);
         $vat = round($subtotal * $product->vat_rate / 100, 2);
 
-        $product->total_ordered = (int) $meals->sum('quantity');
         $product->meals_subtotal = $subtotal;
         $product->meals_total = $subtotal + $vat;
-        $product->total_delivered = (int) $meals->sum('delivered_quantity');
 
         return response()->json(new ProductResource($product));
     }

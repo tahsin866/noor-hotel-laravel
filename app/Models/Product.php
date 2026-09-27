@@ -77,6 +77,25 @@ class Product extends Model
             ]);
     }
 
+    /**
+     * Populate the aggregate attributes the list query adds through
+     * withDeliveredTotals(), so store/update responses carry the same
+     * ordered/delivered/challan totals as the table does.
+     */
+    public function loadDeliveryTotals(): static
+    {
+        $this->loadMissing(['meals' => function (HasMany $meals): void {
+            $meals->withChallanDelivered();
+        }]);
+
+        $this->setAttribute('total_ordered', (int) $this->meals->sum('quantity'));
+        $this->setAttribute('total_delivered', (int) $this->meals->sum('delivered_quantity'));
+        $this->setAttribute('challans_count', $this->challans()->where('status', '!=', 'cancelled')->count());
+        $this->setAttribute('invoiced_challans_count', $this->challans()->where('status', '!=', 'cancelled')->whereHas('invoices')->count());
+
+        return $this;
+    }
+
     public static function generateCode(): string
     {
         $maxNumber = static::withoutGlobalScopes()

@@ -16,7 +16,10 @@ class ProductResource extends JsonResource
             'unit' => $this->unit,
             'vat_rate' => $this->vat_rate,
             'party_id' => $this->party_id,
-            'party_name' => $this->party_name,
+            // index() gets party_name from the joined select; store/update/show
+            // only eager load the relation, so fall back to it when it is loaded.
+            'party_name' => $this->party_name
+                ?? ($this->relationLoaded('party') ? $this->party?->party_name : null),
             'customer_po_number' => $this->customer_po_number,
             'description' => $this->description,
             'attachment_url' => $this->attachment_url,

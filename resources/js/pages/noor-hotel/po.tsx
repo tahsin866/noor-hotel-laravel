@@ -924,7 +924,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             setUnit(p.unit);
             setVatRate(String(p.vat_rate));
             setPartyId(p.party_id ? String(p.party_id) : '');
-            setPartySearch(p.party?.party_name || '');
+            setPartySearch(p.party_name || '');
             setCustomerPoNumber(p.customer_po_number || '');
             setDescription(p.description || '');
             setReminderAt(toDatetimeLocal(p.reminder_at));

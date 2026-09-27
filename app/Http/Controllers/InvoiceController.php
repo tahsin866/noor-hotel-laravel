@@ -27,22 +27,24 @@ class InvoiceController extends Controller
         $dateTo = $request->get('date_to');
         $search = $request->get('search');
 
-        $filters = [];
-        if ($status) {
-            $filters['status'] = $status;
-        }
-        if ($partyId) {
-            $filters['party_id'] = $partyId;
-        }
-        if ($dateFrom) {
-            $filters['date'] = ['>=', $dateFrom];
-        }
-        if ($dateTo) {
-            $filters['date'] = ['<=', $dateTo];
-        }
-
         $query = \App\Models\Invoice::with(['party', 'items.product', 'paymentHistory', 'challans'])
             ->orderByDesc('created_at');
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        if ($partyId) {
+            $query->where('party_id', $partyId);
+        }
+
+        if ($dateFrom) {
+            $query->whereDate('date', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('date', '<=', $dateTo);
+        }
 
         if ($search) {
             $query->where(function ($q) use ($search) {

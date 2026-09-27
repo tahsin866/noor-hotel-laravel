@@ -36,7 +36,7 @@ class ProductService
 
         return $product->load(['meals' => function ($q) {
             $q->withChallanDelivered();
-        }, 'party:id,party_name']);
+        }, 'party:id,party_name'])->loadDeliveryTotals();
     }
 
     public function update(Product $product, array $data, array $meals, ?string $attachmentPath = null, bool $removeAttachment = false): Product
@@ -77,7 +77,7 @@ class ProductService
 
         return $updated->load(['meals' => function ($q) {
             $q->withChallanDelivered();
-        }, 'party:id,party_name']);
+        }, 'party:id,party_name'])->loadDeliveryTotals();
     }
 
     public function search(array $filters = []): \Illuminate\Pagination\LengthAwarePaginator
