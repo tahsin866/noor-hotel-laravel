@@ -63,7 +63,9 @@ class ProductService
 
             if ($mealId !== null && $existingMeals->has($mealId)) {
                 $existing = $existingMeals->get($mealId);
-                $existing->fill($meal)->save();
+                $existing->fill($meal);
+                $existing->delivered_quantity = $existing->getAttributes()['delivered_quantity'] ?? $existing->delivered_quantity;
+                $existing->save();
                 $mealsToKeep[] = $existing->id;
             } else {
                 $new = $product->meals()->create($meal);
