@@ -48,3 +48,5 @@ Route::get('reports/purchase', [PurchaseReportController::class, 'index']);
 Route::get('reports/challan', [ChallanReportController::class, 'index']);
 Route::get('reports/invoice', [InvoiceReportController::class, 'index']);
 Route::get('reports/payment', [PaymentReportController::class, 'index']);
+Route::get('attachments/product/{path}', [ProductController::class, 'serveAttachment'])->name('attachments.product');
+Route::get('attachments/payment/{path}', [InvoiceController::class, 'servePaymentAttachment'])->name('attachments.payment');

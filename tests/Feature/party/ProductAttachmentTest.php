@@ -27,7 +27,7 @@ test('store creates product with attachment', function () {
     expect($product->attachment_path)->not->toBeNull();
 
     Storage::disk('public')->assertExists($product->attachment_path);
-    $response->assertJsonPath('product.attachment_url', Storage::disk('public')->url($product->attachment_path));
+    $response->assertJsonPath('product.attachment_url', route('attachments.product', ['path' => basename($product->attachment_path)]));
 });
 
 test('update replaces attachment and deletes the old file', function () {

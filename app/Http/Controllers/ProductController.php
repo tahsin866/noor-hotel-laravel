@@ -271,4 +271,15 @@ class ProductController extends Controller
 
         return $pdf->stream('po-'.$product->code.'.pdf');
     }
+
+    public function serveAttachment(Request $request, string $path)
+    {
+        $fullPath = 'product-attachments/'.$path;
+
+        if (! Storage::disk('public')->exists($fullPath)) {
+            abort(404);
+        }
+
+        return Storage::disk('public')->response($fullPath);
+    }
 }

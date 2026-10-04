@@ -385,6 +385,7 @@ params.set('date_to', dateTo);
                         <div>Total Chalan Amount: <strong>Tk ${fmt$(summary.chalan_total)}</strong></div>
                         <div>Total Paid: <strong>Tk ${fmt$(summary.paid_total)}</strong></div>
                         <div>Balance (Due): <strong>Tk ${fmt$(summary.due_total)}</strong></div>
+                        <div>Reduce Balance: <strong>Tk ${fmt$(summary.total_reduce)}</strong></div>
                         <div>Pending Challans: <strong>Tk ${fmt$(summary.chalan_pending)}</strong></div>
                         <div>Dispatched Challans: <strong>Tk ${fmt$(summary.chalan_dispatched)}</strong></div>
                         <div>Delivered Challans: <strong>Tk ${fmt$(summary.chalan_delivered)}</strong></div>
@@ -486,6 +487,7 @@ params.set('date_to', dateTo);
             { Metric: 'Cancelled Challans', Value: summary.chalan_cancelled },
             { Metric: 'Total Paid', Value: summary.paid_total },
             { Metric: 'Balance (Due)', Value: summary.due_total },
+            { Metric: 'Reduce Balance', Value: summary.total_reduce },
             { Metric: 'Unpaid Invoices', Value: summary.unpaid_count },
             { Metric: 'Unpaid Amount', Value: summary.unpaid_amount },
             { Metric: 'Total Receivable', Value: summary.total_receivable },
@@ -696,6 +698,13 @@ params.set('date_to', dateTo);
                                 </div>
                                 <div className="mt-1 text-xl font-bold tabular-nums text-red-600">Tk {fmt$(summary.due_total)}</div>
                                 <div className="mt-2 space-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="size-1.5 rounded-full bg-red-400" />
+                                            Reduce Balance
+                                        </span>
+                                        <strong className="tabular-nums">Tk {fmt$(summary.total_reduce)}</strong>
+                                    </div>
                                     <div className="flex items-center justify-between gap-2">
                                         <span className="flex items-center gap-1.5">
                                             <span className="size-1.5 rounded-full bg-amber-400" />

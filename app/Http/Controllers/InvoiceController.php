@@ -654,4 +654,15 @@ class InvoiceController extends Controller
 
         return trim($result);
     }
+
+    public function servePaymentAttachment(Request $request, string $path)
+    {
+        $fullPath = 'payment-attachments/'.$path;
+
+        if (! Storage::disk('public')->exists($fullPath)) {
+            abort(404);
+        }
+
+        return Storage::disk('public')->response($fullPath);
+    }
 }

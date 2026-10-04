@@ -384,7 +384,7 @@ test('payment report summary calculates chalan paid and due totals', function ()
         'status' => 'delivered',
     ]);
     createReportPayment(
-        paymentData: ['amount' => 2500],
+        paymentData: ['amount' => 2500, 'reduce_amount' => 0],
         party: $party
     );
 

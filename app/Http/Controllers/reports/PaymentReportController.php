@@ -163,7 +163,7 @@ class PaymentReportController extends Controller
             'reduce_amount' => $payment->reduce_amount,
             'reduce_note' => $payment->reduce_note,
             'attachment' => $payment->attachment
-                ? Storage::disk('public')->url($payment->attachment)
+                ? route('attachments.payment', ['path' => basename($payment->attachment)])
                 : null,
             'is_unpaid' => false,
         ];
@@ -197,18 +197,19 @@ class PaymentReportController extends Controller
     {
         $unpaidAmount = round($unpaid->sum('amount'), 2);
         $paymentAmount = round($payments->sum('amount'), 2);
+        $totalReduce = round($payments->sum('reduce_amount'), 2);
 
         return [
             'total_payments' => $payments->count(),
             'total_amount' => $paymentAmount,
-            'total_reduce' => round($payments->sum('reduce_amount'), 2),
+            'total_reduce' => $totalReduce,
             'chalan_total' => $chalanTotal,
             'chalan_pending' => $chalanPending,
             'chalan_dispatched' => $chalanDispatched,
             'chalan_delivered' => $chalanDelivered,
             'chalan_cancelled' => $chalanCancelled,
             'paid_total' => $paidTotal,
-            'due_total' => round($chalanDispatched + $chalanDelivered - $paidTotal, 2),
+            'due_total' => max(0, round($chalanDispatched + $chalanDelivered - $paidTotal - $totalReduce, 2)),
             'unpaid_count' => $unpaid->count(),
             'unpaid_amount' => $unpaidAmount,
             'total_receivable' => round($paymentAmount + $unpaidAmount, 2),

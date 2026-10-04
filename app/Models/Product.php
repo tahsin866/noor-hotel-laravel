@@ -41,7 +41,7 @@ class Product extends Model
     public function getAttachmentUrlAttribute(): ?string
     {
         return $this->attachment_path
-            ? Storage::disk('public')->url($this->attachment_path)
+            ? route('attachments.product', ['path' => basename($this->attachment_path)])
             : null;
     }
 

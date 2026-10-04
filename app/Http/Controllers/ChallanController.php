@@ -34,20 +34,19 @@ class ChallanController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $page = $request->get('page', 1);
-        $limit = $request->get('limit', 10);
+        $page = max(1, (int) $request->get('page', 1));
+        $limit = max(1, (int) $request->get('limit', 10));
         $status = $request->get('status');
         $search = $request->get('search');
         $partyId = $request->get('party_id');
 
-        $filters = [];
-        if ($status) {
-            $filters['status'] = $status;
-        }
-
         $query = \App\Models\Challan::query()
             ->with(['product', 'product.party', 'user', 'items'])
             ->orderByDesc('created_at');
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
 
         if ($search) {
             $query->where(function ($q) use ($search) {
