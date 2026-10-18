@@ -24,6 +24,7 @@ class Invoice extends Model
         'amount_due',
         'status',
         'print_status',
+        'show_print_date',
         'notes',
     ];
 
@@ -35,6 +36,7 @@ class Invoice extends Model
         'total_amount' => 'decimal:2',
         'amount_paid' => 'decimal:2',
         'amount_due' => 'decimal:2',
+        'show_print_date' => 'boolean',
     ];
 
     public function party()

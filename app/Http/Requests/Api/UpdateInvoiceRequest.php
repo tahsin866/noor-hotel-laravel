@@ -20,6 +20,7 @@ class UpdateInvoiceRequest extends FormRequest
             'notes' => 'nullable|string',
             'challan_ids' => 'required|array|min:1',
             'challan_ids.*' => 'exists:challans,id',
+            'show_print_date' => 'boolean',
         ];
     }
 }

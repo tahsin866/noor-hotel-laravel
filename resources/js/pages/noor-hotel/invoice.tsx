@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import {
     Eye,
@@ -106,6 +107,7 @@ type Invoice = {
     amount_due: number;
     status: string;
     print_status: string;
+    show_print_date?: boolean;
     subtotal?: number;
     total_vat?: number;
     customer_po_number?: string;
@@ -205,6 +207,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
     const [formChallanIds, setFormChallanIds] = useState<number[]>([]);
     const [formChallans, setFormChallans] = useState<Challan[]>(challans);
     const [chalSearch, setChalSearch] = useState('');
+    const [showPrintDate, setShowPrintDate] = useState(true);
 
     const filteredFilterParties = parties.filter((p) =>
         p.party_name.toLowerCase().includes(partyFilterSearch.toLowerCase())
@@ -290,6 +293,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                     due_date: formDueDate,
                     notes: formNotes,
                     challan_ids: formChallanIds,
+                    show_print_date: showPrintDate,
                 }),
             });
             const data = await res.json();
@@ -319,6 +323,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
         setFormChallanIds([]);
         setFormChallans(challans);
         setChalSearch('');
+        setShowPrintDate(true);
     };
 
     const openEdit = async (id: number) => {
@@ -338,6 +343,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
             setFormDate(inv.date ? String(inv.date).slice(0, 10) : '');
             setFormDueDate(inv.due_date ? String(inv.due_date).slice(0, 10) : '');
             setFormNotes(inv.notes || '');
+            setShowPrintDate(inv.show_print_date !== false);
             setFormChallanIds((inv.challans || []).map((c: InvoiceChallan) => c.id));
             setFormChallans((prev) => {
                 const map = new Map<number, Challan>();
@@ -556,7 +562,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
             </td>
             <td style="width:40%;text-align:right;">
                 <div style="display:inline-block;text-align:left;margin-top:4px;">
-                    <strong>Invoice Date:</strong> ${dateStr}<br/>
+                    <strong>Invoice Date:</strong> ${d.show_print_date !== false ? dateStr : '<span style="display:inline-block;width:90px;border-bottom:1px solid #1e293b;">&nbsp;</span>'}<br/>
                     <strong>Ref:</strong> ${d.invoice_number}<br/>
                     ${d.customer_po_number ? `<strong>Customer PO:</strong> ${d.customer_po_number}<br/>` : ''}
                 </div>
@@ -667,7 +673,7 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                     <div style="text-align:center;margin-bottom:20px;"><h1 style="font-size:26px;margin:0;color:#0f172a;text-transform:uppercase;letter-spacing:2px;">INVOICE</h1></div>
                     <table style="width:100%;border:none;margin-bottom:20px;font-size:13px;">
                         <tr><td style="width:60%;border:none;padding:4px 0;vertical-align:top;word-break:break-word;"><strong>Invoice to:</strong><br/>${d.party_name || 'N/A'}<br/>${d.party_address || ''}</td>
-                            <td style="width:40%;border:none;padding:4px 0;text-align:right;vertical-align:top;"><div style="display:inline-block;text-align:left;margin-top:4px;"><strong>Invoice Date:</strong> ${dateStr}<br/><strong>Ref:</strong> ${d.invoice_number}<br/>${poLine}</div></td></tr>
+                            <td style="width:40%;border:none;padding:4px 0;text-align:right;vertical-align:top;"><div style="display:inline-block;text-align:left;margin-top:4px;"><strong>Invoice Date:</strong> ${d.show_print_date !== false ? dateStr : '<span style="display:inline-block;width:90px;border-bottom:1px solid #1e293b;">&nbsp;</span>'}<br/><strong>Ref:</strong> ${d.invoice_number}<br/>${poLine}</div></td></tr>
                     </table>
                     <table style="width:100%;table-layout:fixed;border-collapse:collapse;margin-bottom:20px;">
                         <thead><tr><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:22px;">SL</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;">Product / Item</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:left;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:80px;">Meal</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:center;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:32px;">Qty</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:right;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:60px;">Rate</th><th style="background:#f1f5f9;padding:6px 8px;border:1px solid #000;text-align:right;font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:0.5px;width:60px;">Amount</th></tr></thead>
@@ -1147,6 +1153,22 @@ export default function Invoices({ parties, products, challans }: { parties: Par
                                 value={formNotes}
                                 onChange={(e) => setFormNotes(e.target.value)}
                             />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Checkbox
+                                id="show_print_date"
+                                checked={showPrintDate}
+                                onCheckedChange={(checked) =>
+                                    setShowPrintDate(checked === true)
+                                }
+                                className="data-[state=checked]:border-emerald-600 data-[state=checked]:bg-emerald-600"
+                            />
+                            <Label
+                                htmlFor="show_print_date"
+                                className="cursor-pointer text-sm font-medium"
+                            >
+                                Show date on print
+                            </Label>
                         </div>
                     </div>
                     <DialogFooter className="border-t border-border pt-4">

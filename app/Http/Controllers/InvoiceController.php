@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreInvoiceRequest;
 use App\Http\Requests\Api\UpdateInvoiceRequest;
 use App\Http\Resources\InvoiceResource;
+use App\Models\Invoice;
 use App\Services\InvoiceService;
 use App\Support\NotifyAdmins;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -27,7 +28,7 @@ class InvoiceController extends Controller
         $dateTo = $request->get('date_to');
         $search = $request->get('search');
 
-        $query = \App\Models\Invoice::with(['party', 'items.product', 'paymentHistory', 'challans'])
+        $query = Invoice::with(['party', 'items.product', 'paymentHistory', 'challans'])
             ->orderByDesc('created_at');
 
         if ($status && $status !== 'all') {
@@ -98,7 +99,7 @@ class InvoiceController extends Controller
 
     public function show($id): JsonResponse
     {
-        $invoice = \App\Models\Invoice::with([
+        $invoice = Invoice::with([
             'party',
             'items.product',
             'challans.product',
@@ -115,7 +116,7 @@ class InvoiceController extends Controller
 
     public function destroy($id): JsonResponse
     {
-        $invoice = \App\Models\Invoice::findOrFail($id);
+        $invoice = Invoice::findOrFail($id);
         $invoice->items()->delete();
         $invoice->challans()->detach();
         $invoice->paymentHistory()->delete();
@@ -126,7 +127,7 @@ class InvoiceController extends Controller
 
     public function markPrinted($id): JsonResponse
     {
-        $invoice = \App\Models\Invoice::findOrFail($id);
+        $invoice = Invoice::findOrFail($id);
         $invoice->update(['print_status' => 'printed']);
 
         return response()->json(['success' => true, 'message' => 'Invoice marked as printed']);
@@ -143,6 +144,7 @@ class InvoiceController extends Controller
             $validated['date'],
             $validated['due_date'],
             $validated['notes'] ?? null,
+            $validated['show_print_date'] ?? true,
         );
 
         NotifyAdmins::recordCreated('invoice', [
@@ -161,13 +163,14 @@ class InvoiceController extends Controller
     public function update(UpdateInvoiceRequest $request, $id, InvoiceService $invoiceService): JsonResponse
     {
         $validated = $request->validated();
-        $invoice = \App\Models\Invoice::findOrFail($id);
+        $invoice = Invoice::findOrFail($id);
 
         $invoice->update([
             'party_id' => $validated['party_id'],
             'date' => $validated['date'],
             'due_date' => $validated['due_date'],
             'notes' => $validated['notes'] ?? null,
+            'show_print_date' => $validated['show_print_date'] ?? true,
         ]);
 
         $invoice = $invoiceService->updateFromChallans($invoice, $validated['challan_ids']);
@@ -179,7 +182,7 @@ class InvoiceController extends Controller
         ]);
     }
 
-    public function rebuildFromChallans(\App\Models\Invoice $invoice): void
+    public function rebuildFromChallans(Invoice $invoice): void
     {
         $this->invoices->rebuildFromChallans($invoice);
     }
@@ -201,7 +204,7 @@ class InvoiceController extends Controller
             'reduce_note' => 'nullable|string',
         ]);
 
-        $invoice = \App\Models\Invoice::findOrFail($id);
+        $invoice = Invoice::findOrFail($id);
         $status = $request->status;
 
         $attachmentPath = null;
@@ -319,7 +322,7 @@ class InvoiceController extends Controller
         ]);
 
         $invoiceIds = array_unique($request->invoice_ids);
-        $invoices = \App\Models\Invoice::whereIn('id', $invoiceIds)->get();
+        $invoices = Invoice::whereIn('id', $invoiceIds)->get();
 
         $payable = $invoices->filter(fn ($inv) => (float) $inv->amount_due > 0)->values();
 
@@ -395,7 +398,7 @@ class InvoiceController extends Controller
 
     public function paymentHistory($id): JsonResponse
     {
-        $invoice = \App\Models\Invoice::with(['party', 'paymentHistory'])->findOrFail($id);
+        $invoice = Invoice::with(['party', 'paymentHistory'])->findOrFail($id);
 
         return response()->json([
             'success' => true,
@@ -436,7 +439,7 @@ class InvoiceController extends Controller
         $dateTo = $request->get('date_to');
         $status = $request->get('status');
 
-        $query = \App\Models\Invoice::with(['party', 'paymentHistory'])
+        $query = Invoice::with(['party', 'paymentHistory'])
             ->orderByDesc('created_at');
 
         if ($partyId) {
@@ -495,7 +498,7 @@ class InvoiceController extends Controller
 
     public function print(Request $request, $id)
     {
-        $invoice = \App\Models\Invoice::with([
+        $invoice = Invoice::with([
             'party',
             'items.product',
             'challans.product',
@@ -529,7 +532,7 @@ class InvoiceController extends Controller
             return [
                 'challan_number' => $ch->challan_number,
                 'product_name' => $ch->product->name ?? '-',
-                'date' => \Carbon\Carbon::parse($ch->date)->format('d/m/Y'),
+                'date' => Carbon::parse($ch->date)->format('d/m/Y'),
                 'items' => $challanItems,
             ];
         });

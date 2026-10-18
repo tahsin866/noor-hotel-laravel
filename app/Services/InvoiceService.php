@@ -8,6 +8,7 @@ use App\Models\Challan;
 use App\Models\Invoice;
 use App\Models\PaymentHistory;
 use App\ValueObjects\InvoiceNumber;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class InvoiceService
@@ -17,7 +18,7 @@ class InvoiceService
         private ChallanService $challanService,
     ) {}
 
-    public function createFromChallans(array $challanIds, int $partyId, int $userId, string $date, string $dueDate, ?string $notes): Invoice
+    public function createFromChallans(array $challanIds, int $partyId, int $userId, string $date, string $dueDate, ?string $notes, bool $showPrintDate = true): Invoice
     {
         $challans = Challan::with(['product', 'product.party', 'items.productMeal.product'])
             ->whereIn('id', $challanIds)
@@ -41,6 +42,7 @@ class InvoiceService
             'total_amount' => round($totalAmount, 2),
             'amount_paid' => 0,
             'amount_due' => round($totalAmount, 2),
+            'show_print_date' => $showPrintDate,
             'notes' => $notes,
             'status' => 'pending',
         ]);
@@ -173,7 +175,7 @@ class InvoiceService
     /**
      * Build the invoice lines that the given challans would produce, without persisting anything.
      *
-     * @param  \Illuminate\Support\Collection<int, Challan>  $challans
+     * @param  Collection<int, Challan>  $challans
      * @return array{items: array<int, array<string, mixed>>, subtotal: float, total_vat: float, total_amount: float}
      */
     public function buildItemsPreview($challans): array
@@ -194,7 +196,7 @@ class InvoiceService
                 }
 
                 $productId = $ci->productMeal->product->id ?? null;
-                if (!$productId) {
+                if (! $productId) {
                     continue;
                 }
 
@@ -209,6 +211,7 @@ class InvoiceService
 
                 if (isset($grouped[$key])) {
                     $grouped[$key]['quantity'] += (int) $ci->quantity;
+
                     continue;
                 }
 
