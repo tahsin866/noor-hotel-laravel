@@ -117,6 +117,9 @@ const mealLabels: Record<string, string> = {
     morning_snacks: 'Morning Snacks',
     evening_snacks: 'Evening Snacks',
     hot_meal: 'Hot Meal',
+    sweets: 'Sweets',
+    dessert: 'Dessert',
+    grocery: 'Grocery',
 };
 
 const mealBadge: Record<string, string> = {
@@ -127,6 +130,9 @@ const mealBadge: Record<string, string> = {
     morning_snacks: 'bg-orange-100 text-orange-700',
     evening_snacks: 'bg-violet-100 text-violet-700',
     hot_meal: 'bg-red-100 text-red-700',
+    sweets: 'bg-yellow-100 text-yellow-700',
+    dessert: 'bg-fuchsia-100 text-fuchsia-700',
+    grocery: 'bg-emerald-100 text-emerald-700',
 };
 
 const formatMealType = (type: string) =>
@@ -329,6 +335,15 @@ function MealFormFieldsInner({
                                             </SelectItem>
                                             <SelectItem value="hot_meal">
                                                 Hot Meal
+                                            </SelectItem>
+                                            <SelectItem value="sweets">
+                                                Sweets
+                                            </SelectItem>
+                                            <SelectItem value="dessert">
+                                                Dessert
+                                            </SelectItem>
+                                            <SelectItem value="grocery">
+                                                Grocery
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -814,8 +829,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
             (s, m) => s + (m.over_delivered ?? 0),
             0,
         );
-    const viewNetRemaining =
-        viewingProduct?.net_remaining ?? viewRemaining - viewOverDelivered;
+    const viewNetRemaining = viewRemaining - viewOverDelivered;
 
     const [challanProduct, setChallanProduct] = useState<Product | null>(null);
     const [challanDate, setChallanDate] = useState(
