@@ -119,7 +119,22 @@ const mealLabels: Record<string, string> = {
     hot_meal: 'Hot Meal',
     sweets: 'Sweets',
     dessert: 'Dessert',
-    grocery: 'Grocery',
+    grocery: 'Grocery & Dry Foods',
+    meat_seafood: 'Meat & Seafood',
+    fish: 'Fish',
+    frozen_item: 'Frozen Item',
+    grocery_dry: 'Grocery & Dry Foods',
+    meat_poultry: 'Meat & Poultry',
+    fish_seafood: 'Fish & Seafood',
+    vegetables_fruits: 'Vegetables & Fruits',
+    dairy_eggs: 'Dairy & Eggs',
+    spices_oil_condiments: 'Spices, Oil & Condiments',
+    bakery_confectionery: 'Bakery & Confectionery',
+    snacks_fast_food: 'Snacks & Fast Food',
+    beverages_water: 'Beverages & Water',
+    cooked_food_meals: 'Cooked Food & Meals',
+    food_packages_catering: 'Food Packages & Catering',
+    others: 'Others',
 };
 
 const mealBadge: Record<string, string> = {
@@ -133,6 +148,21 @@ const mealBadge: Record<string, string> = {
     sweets: 'bg-yellow-100 text-yellow-700',
     dessert: 'bg-fuchsia-100 text-fuchsia-700',
     grocery: 'bg-emerald-100 text-emerald-700',
+    meat_seafood: 'bg-rose-100 text-rose-700',
+    fish: 'bg-cyan-100 text-cyan-700',
+    frozen_item: 'bg-sky-100 text-sky-700',
+    grocery_dry: 'bg-emerald-100 text-emerald-700',
+    meat_poultry: 'bg-red-100 text-red-700',
+    fish_seafood: 'bg-cyan-100 text-cyan-700',
+    vegetables_fruits: 'bg-lime-100 text-lime-700',
+    dairy_eggs: 'bg-blue-100 text-blue-700',
+    spices_oil_condiments: 'bg-orange-100 text-orange-700',
+    bakery_confectionery: 'bg-yellow-100 text-yellow-700',
+    snacks_fast_food: 'bg-pink-100 text-pink-700',
+    beverages_water: 'bg-teal-100 text-teal-700',
+    cooked_food_meals: 'bg-amber-100 text-amber-700',
+    food_packages_catering: 'bg-purple-100 text-purple-700',
+    others: 'bg-slate-100 text-slate-600',
 };
 
 const formatMealType = (type: string) =>
@@ -344,6 +374,51 @@ function MealFormFieldsInner({
                                             </SelectItem>
                                             <SelectItem value="grocery">
                                                 Grocery
+                                            </SelectItem>
+                                            <SelectItem value="meat_seafood">
+                                                Meat & Seafood
+                                            </SelectItem>
+                                            <SelectItem value="fish">
+                                                Fish
+                                            </SelectItem>
+                                            <SelectItem value="frozen_item">
+                                                Frozen Item
+                                            </SelectItem>
+                                            <SelectItem value="grocery_dry">
+                                                Grocery & Dry Foods
+                                            </SelectItem>
+                                            <SelectItem value="meat_poultry">
+                                                Meat & Poultry
+                                            </SelectItem>
+                                            <SelectItem value="fish_seafood">
+                                                Fish & Seafood
+                                            </SelectItem>
+                                            <SelectItem value="vegetables_fruits">
+                                                Vegetables & Fruits
+                                            </SelectItem>
+                                            <SelectItem value="dairy_eggs">
+                                                Dairy & Eggs
+                                            </SelectItem>
+                                            <SelectItem value="spices_oil_condiments">
+                                                Spices, Oil & Condiments
+                                            </SelectItem>
+                                            <SelectItem value="bakery_confectionery">
+                                                Bakery & Confectionery
+                                            </SelectItem>
+                                            <SelectItem value="snacks_fast_food">
+                                                Snacks & Fast Food
+                                            </SelectItem>
+                                            <SelectItem value="beverages_water">
+                                                Beverages & Water
+                                            </SelectItem>
+                                            <SelectItem value="cooked_food_meals">
+                                                Cooked Food & Meals
+                                            </SelectItem>
+                                            <SelectItem value="food_packages_catering">
+                                                Food Packages & Catering
+                                            </SelectItem>
+                                            <SelectItem value="others">
+                                                Others
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>

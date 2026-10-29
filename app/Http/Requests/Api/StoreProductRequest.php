@@ -23,7 +23,7 @@ class StoreProductRequest extends FormRequest
             'reminder_at' => 'nullable|date',
             'attachment' => 'nullable|file|max:10240',
             'meals' => 'required|array|min:1',
-            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snacks,morning_snacks,evening_snacks,hot_meal',
+            'meals.*.meal_type' => 'required|string|in:breakfast,lunch,dinner,snacks,morning_snacks,evening_snacks,hot_meal,sweets,dessert,grocery,meat_seafood,fish,frozen_item,grocery_dry,meat_poultry,fish_seafood,vegetables_fruits,dairy_eggs,spices_oil_condiments,bakery_confectionery,snacks_fast_food,beverages_water,cooked_food_meals,food_packages_catering,others',
             'meals.*.quantity' => 'required|integer|min:0',
             'meals.*.unit_price' => 'required|numeric|min:0',
             'meals.*.description' => 'nullable|string',
