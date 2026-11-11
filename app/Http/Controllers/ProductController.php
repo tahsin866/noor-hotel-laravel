@@ -46,6 +46,7 @@ class ProductController extends Controller
                 $q->where('products.code', 'like', "%{$search}%")
                     ->orWhere('products.name', 'like', "%{$search}%")
                     ->orWhere('products.customer_po_number', 'like', "%{$search}%")
+                    ->orWhereHas('challans.invoices', fn ($invoices) => $invoices->where('invoices.invoice_number', 'like', "%{$search}%"))
                     ->orWhere('parties.party_name', 'like', "%{$search}%");
             });
         }
@@ -201,6 +202,24 @@ class ProductController extends Controller
             ->unique()
             ->implode("\n");
 
+        $challanSummaries = $challans
+            ->sortBy(fn ($c) => [(string) $c->date, $c->id])
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'challan_number' => $c->challan_number,
+                'date' => $c->date ? \Illuminate\Support\Carbon::parse($c->date)->toDateString() : null,
+                'notes' => $c->notes,
+                'items' => $c->items->map(fn ($it) => [
+                    'product_meal_id' => $it->product_meal_id,
+                    'description' => $it->productMeal->description
+                        ?? $it->productMeal->product->name
+                        ?? '-',
+                    'meal_type' => $it->productMeal->meal_type ?? '',
+                    'quantity' => (int) $it->quantity,
+                ])->values(),
+            ])
+            ->values();
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -212,6 +231,7 @@ class ProductController extends Controller
                 'delivery_date' => now()->format('d/m/Y'),
                 'notes' => $notes,
                 'items' => $items,
+                'challans' => $challanSummaries,
             ],
         ]);
     }

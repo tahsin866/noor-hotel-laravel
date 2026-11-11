@@ -52,12 +52,40 @@ class Product extends Model
 
     public function meals(): HasMany
     {
-        return $this->hasMany(ProductMeal::class);
+        return $this->hasMany(ProductMeal::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function challans(): HasMany
     {
         return $this->hasMany(Challan::class);
+    }
+
+    /**
+     * Relations needed by invoiceLinks(); kept lean because the PO list loads them for every row.
+     */
+    public const INVOICE_LINKS_RELATIONS = [
+        'challans:id,product_id',
+        'challans.invoices:invoices.id,invoices.invoice_number',
+    ];
+
+    /**
+     * Invoices raised from this PO's challans, oldest first.
+     *
+     * @return array<int, array{id: int, invoice_number: string}>
+     */
+    public function invoiceLinks(): array
+    {
+        if (! $this->relationLoaded('challans')) {
+            return [];
+        }
+
+        return $this->challans
+            ->flatMap(fn (Challan $challan) => $challan->invoices)
+            ->unique('id')
+            ->sortBy('id')
+            ->map(fn (Invoice $invoice): array => ['id' => (int) $invoice->id, 'invoice_number' => $invoice->invoice_number])
+            ->values()
+            ->all();
     }
 
     public function scopeWithDeliveredTotals(Builder $query): Builder
@@ -67,6 +95,7 @@ class Product extends Model
             ->with(['meals' => function (HasMany $meals): void {
                 $meals->withChallanDelivered();
             }])
+            ->with(self::INVOICE_LINKS_RELATIONS)
             ->addSelect([
                 'total_delivered' => ChallanItem::query()
                     ->join('challans', 'challans.id', '=', 'challan_items.challan_id')
@@ -87,6 +116,7 @@ class Product extends Model
         $this->loadMissing(['meals' => function (HasMany $meals): void {
             $meals->withChallanDelivered();
         }]);
+        $this->loadMissing(self::INVOICE_LINKS_RELATIONS);
 
         $this->setAttribute('total_ordered', (int) $this->meals->sum('quantity'));
         $this->setAttribute('total_delivered', (int) $this->meals->sum('delivered_quantity'));

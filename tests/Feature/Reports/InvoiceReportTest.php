@@ -275,33 +275,38 @@ test('invoice report summary calculates correctly', function () {
 });
 
 test('invoice report paginates and honors per_page', function () {
-    for ($i = 0; $i < 12; $i++) {
+    for ($i = 0; $i < 30; $i++) {
         createReportInvoice();
     }
 
     $default = $this->get('/api/reports/invoice');
     $default->assertOk();
-    expect($default->json('data.rows'))->toHaveCount(10);
+    expect($default->json('data.rows'))->toHaveCount(25);
     expect($default->json('data.pagination'))->toMatchArray([
         'current_page' => 1,
-        'per_page' => 10,
-        'total' => 12,
+        'per_page' => 25,
+        'total' => 30,
         'last_page' => 2,
     ]);
 
     $pageTwo = $this->get('/api/reports/invoice?page=2');
     $pageTwo->assertOk();
-    expect($pageTwo->json('data.rows'))->toHaveCount(2);
+    expect($pageTwo->json('data.rows'))->toHaveCount(5);
     expect($pageTwo->json('data.pagination.current_page'))->toBe(2);
 
-    $perPageTwenty = $this->get('/api/reports/invoice?per_page=20');
-    $perPageTwenty->assertOk();
-    expect($perPageTwenty->json('data.rows'))->toHaveCount(12);
+    $perPageFifty = $this->get('/api/reports/invoice?per_page=50');
+    $perPageFifty->assertOk();
+    expect($perPageFifty->json('data.rows'))->toHaveCount(30);
+
+    $all = $this->get('/api/reports/invoice?all=1&per_page=10');
+    $all->assertOk();
+    expect($all->json('data.rows'))->toHaveCount(30);
+    expect($all->json('data.pagination.last_page'))->toBe(1);
 
     $invalidPerPage = $this->get('/api/reports/invoice?per_page=7');
     $invalidPerPage->assertOk();
-    expect($invalidPerPage->json('data.pagination.per_page'))->toBe(10);
+    expect($invalidPerPage->json('data.pagination.per_page'))->toBe(25);
 
     $summary = $default->json('data.summary');
-    expect($summary['total_invoices'])->toBe(12);
+    expect($summary['total_invoices'])->toBe(30);
 });

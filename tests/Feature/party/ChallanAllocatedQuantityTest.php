@@ -137,3 +137,41 @@ test('summary challan aggregates items and generates next serial', function () {
         ->and($data['items'][1]['quantity'])->toBe(5)
         ->and($data['items'][0]['description'])->toContain('Biscuit');
 });
+
+test('summary challan lists each non-cancelled challan with its date and items, oldest first', function () {
+    actingAsChallanPageUser($this);
+    $product = createChallanAllocationProduct(50);
+    $meal = $product->meals()->first();
+
+    $makeChallan = function (string $serial, string $date, string $status, int $qty) use ($product, $meal) {
+        $challan = Challan::factory()->create([
+            'challan_number' => $serial,
+            'product_id' => $product->id,
+            'user_id' => auth()->id(),
+            'status' => $status,
+            'date' => $date,
+        ]);
+
+        ChallanItem::factory()->create([
+            'challan_id' => $challan->id,
+            'product_meal_id' => $meal->id,
+            'quantity' => $qty,
+            'unit_price' => 100,
+        ]);
+    };
+
+    $makeChallan('Noor/2026/CH/2002', '2026-11-05', 'delivered', 4);
+    $makeChallan('Noor/2026/CH/2001', '2026-11-01', 'pending', 3);
+    $makeChallan('Noor/2026/CH/2003', '2026-11-09', 'cancelled', 9);
+
+    $challans = $this->get('/api/products/'.$product->id.'/summary-challan')
+        ->assertOk()
+        ->json('data.challans');
+
+    expect($challans)->toHaveCount(2)
+        ->and($challans[0]['challan_number'])->toBe('Noor/2026/CH/2001')
+        ->and($challans[0]['date'])->toBe('2026-11-01')
+        ->and($challans[0]['items'][0]['product_meal_id'])->toBe($meal->id)
+        ->and($challans[0]['items'][0]['quantity'])->toBe(3)
+        ->and($challans[1]['date'])->toBe('2026-11-05');
+});

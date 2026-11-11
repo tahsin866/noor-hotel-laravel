@@ -136,8 +136,8 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(10);
-    const [pagination, setPagination] = useState<Pagination>({ current_page: 1, per_page: 10, total: 0, last_page: 1 });
+    const [perPage, setPerPage] = useState(25);
+    const [pagination, setPagination] = useState<Pagination>({ current_page: 1, per_page: 25, total: 0, last_page: 1 });
 
     const toggleExpand = (id: number) => {
         setExpanded((prev) => {
@@ -173,7 +173,7 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
             if (data.success) {
                 setRows(data.data.rows || []);
                 setSummary(data.data.summary || null);
-                setPagination(data.data.pagination || { current_page: 1, per_page: 10, total: 0, last_page: 1 });
+                setPagination(data.data.pagination || { current_page: 1, per_page: 25, total: 0, last_page: 1 });
             } else {
                 toast.error(data.message || 'Failed to load report');
             }
@@ -188,62 +188,63 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
         fetchReport();
     }, [fetchReport]);
 
+    const deliveredItems = (r: Row) => (r.items || []).filter((it) => Number(it.quantity) > 0);
+
+    const escapeHtml = (value: string | number | null | undefined) =>
+        String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+
     const buildRowHtml = (r: Row, i: number) => {
-        const itemRows =
-            r.items && r.items.length > 0
-                ? r.items
-                      .map(
-                          (it) => `<tr>
-                                    <td colspan="3" style="padding:2px 6px;border:1px solid #000;font-size:9px;background:#f8fafc;"></td>
-                                    <td colspan="2" style="padding:2px 6px;border:1px solid #000;font-size:9px;background:#f8fafc;font-weight:600;">${formatMealType(it.meal_type)}</td>
-                                    <td colspan="3" style="padding:2px 6px;border:1px solid #000;font-size:9px;background:#f8fafc;">${it.description || '—'}</td>
-                                    <td colspan="2" style="padding:2px 6px;border:1px solid #000;font-size:9px;background:#f8fafc;text-align:right;">Qty ${fmtNum(it.quantity)} @ Tk ${fmt$(it.unit_price)}</td>
-                                    <td style="padding:2px 6px;border:1px solid #000;font-size:9px;background:#f8fafc;text-align:right;">Tk ${fmt$(it.total)}</td>
-                                </tr>`
-                      )
-                      .join('')
-                : '';
-        return `<tr>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;">${i + 1}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;font-weight:600;">${r.challan_number}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:center;">${fmtDate(r.date)}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;">${r.po_number}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;">${r.product_name}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;">${r.customer_po_number || '—'}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;">${r.party_name}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;">${r.address || '—'}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:right;">${fmtNum(r.total_qty)}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:right;font-weight:bold;">Tk ${fmt$(r.total_amount)}</td>
-            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:center;text-transform:capitalize;">${r.status}</td>
-        </tr>${itemRows}`;
+        const itemRows = deliveredItems(r)
+            .map(
+                (it) => `<tr class="item">
+                    <td colspan="3"></td>
+                    <td colspan="2" class="meal">${escapeHtml(formatMealType(it.meal_type))}</td>
+                    <td colspan="3">${escapeHtml(it.description || '—')}</td>
+                    <td colspan="2" class="num">Qty ${fmtNum(it.quantity)} @ Tk ${fmt$(it.unit_price)}</td>
+                    <td class="num">Tk ${fmt$(it.total)}</td>
+                </tr>`,
+            )
+            .join('');
+
+        return `<tbody class="challan">
+            <tr class="main">
+                <td class="center">${i + 1}</td>
+                <td class="strong nowrap">${escapeHtml(r.challan_number)}</td>
+                <td class="center">${fmtDate(r.date)}</td>
+                <td class="nowrap">${escapeHtml(r.po_number)}</td>
+                <td>${escapeHtml(r.product_name)}</td>
+                <td>${escapeHtml(r.customer_po_number || '—')}</td>
+                <td>${escapeHtml(r.party_name)}</td>
+                <td>${escapeHtml(r.address || '—')}</td>
+                <td class="num">${fmtNum(r.total_qty)}</td>
+                <td class="num strong">Tk ${fmt$(r.total_amount)}</td>
+                <td class="center capitalize">${escapeHtml(r.status)}</td>
+            </tr>${itemRows}
+        </tbody>`;
     };
 
-    const buildPageHtml = (chunkRows: Row[], startIndex: number, isLast: boolean) => {
-        const body = chunkRows.map((r, idx) => buildRowHtml(r, startIndex + idx)).join('');
-        return `<table style="${isLast ? '' : 'page-break-after: always;'}">
-            <thead>
-                <tr>
-                    <th colspan="11" style="padding:4px 6px;border:none;text-align:center;background:#fff;">
-                        <div class="title">CHALLAN REPORT</div>
-                        <div class="sub-title">Generated by M/S Noor Hotel and Restaurant</div>
-                    </th>
-                </tr>
-                <tr style="background:#f1f5f9;">
-                    <th style="padding:4px 6px;font-size:10px;text-align:center;width:24px;">#</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:left;">Challan No</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:center;width:64px;">Date</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:left;">PO Code</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:left;">Name</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:left;">Customer PO</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:left;">Party</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:left;">Address</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:right;width:56px;">Qty</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:right;width:76px;">Amount</th>
-                    <th style="padding:4px 6px;font-size:10px;text-align:center;width:68px;">Status</th>
-                </tr>
-            </thead>
-            <tbody>${body}</tbody>
-        </table>`;
+    const describeFilters = () => {
+        const parts: string[] = [];
+        const partyName = partyFilter ? parties.find((p) => String(p.id) === String(partyFilter))?.party_name : null;
+
+        parts.push(`Party: ${partyName || 'All'}`);
+        parts.push(`Status: ${filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}`);
+
+        if (dateFrom || dateTo) {
+            parts.push(`Period: ${dateFrom ? fmtDate(dateFrom) : 'Start'} – ${dateTo ? fmtDate(dateTo) : 'Today'}`);
+        }
+
+        if (search.trim()) {
+            parts.push(`Search: "${search.trim()}"`);
+        }
+
+        parts.push(`Printed: ${new Date().toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}`);
+
+        return parts.map(escapeHtml).join(' &nbsp;•&nbsp; ');
     };
 
     const printReport = async () => {
@@ -259,7 +260,7 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
             if (search.trim()) params.set('search', search.trim());
             if (dateFrom) params.set('date_from', dateFrom);
             if (dateTo) params.set('date_to', dateTo);
-            params.set('per_page', '1000');
+            params.set('all', '1');
             const res = await fetch(`/api/reports/challan?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -279,71 +280,99 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
             return;
         }
 
-        const pagesHtml = [];
-        for (let start = 0; start < allRows.length; start += 10) {
-            const chunk = allRows.slice(start, start + 10);
-            const isLast = start + 10 >= allRows.length;
-            pagesHtml.push(buildPageHtml(chunk, start, isLast));
-        }
-
-        const deliveredCount = summary.delivered_count;
-        const dispatchedCount = summary.dispatched_count;
-        const pendingCount = summary.pending_count;
-        const cancelledCount = summary.cancelled_count;
+        const summaryRow = (label: string, amount: number, background: string) => `<tr>
+            <td style="background:${background};">${label}</td>
+            <td class="num" style="background:${background};">Tk ${fmt$(amount)}</td>
+        </tr>`;
 
         const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>Challan Report</title>
         <style>
-            @page{size:A4 landscape;margin:6mm;}
-            *{box-sizing:border-box;}
-            body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:0;font-size:10px;}
-            table{width:100%;border-collapse:collapse;}
-            th,td{border:1px solid #000;}
-            thead{display:table-header-group;}
-            tr{page-break-inside:avoid;}
-            .title{font-size:18px;margin:0;color:#0f172a;text-transform:uppercase;letter-spacing:1.5px;}
-            .sub-title{font-size:10px;color:#64748b;margin:2px 0 0;}
-            .section-title{margin:0;font-size:10px;text-transform:uppercase;color:#475569;letter-spacing:0.5px;}
-            .footer{margin-top:8px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:4px;}
+            @page {
+                size: A4 landscape;
+                margin: 12mm 10mm 14mm 10mm;
+                @bottom-left { content: "M/S Noor Hotel and Restaurant — Challan Report"; font: 8px Arial, sans-serif; color: #64748b; }
+                @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8px Arial, sans-serif; color: #64748b; }
+            }
+            * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { font-family: Arial, sans-serif; color: #1e293b; margin: 0; padding: 0; font-size: 9.5px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #000; padding: 3px 5px; vertical-align: top; }
+            thead { display: table-header-group; }
+            thead .report-head th { border: none; border-bottom: 1.5px solid #0f172a; padding: 0 0 5px; text-align: left; background: #fff; }
+            thead .columns th { background: #f1f5f9; font-size: 9.5px; text-align: left; }
+            tbody.challan { break-inside: avoid; page-break-inside: avoid; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            tr.main td { font-size: 9.5px; }
+            tr.item td { font-size: 8.5px; background: #f8fafc; padding: 2px 5px; }
+            tr.item td.meal { font-weight: 600; }
+            .num { text-align: right; white-space: nowrap; }
+            .center { text-align: center; }
+            .nowrap { white-space: nowrap; }
+            .strong { font-weight: 700; }
+            .capitalize { text-transform: capitalize; }
+            .head-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+            .title { font-size: 16px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 1.2px; }
+            .company { font-size: 10px; color: #475569; margin-top: 1px; }
+            .filters { font-size: 8.5px; color: #475569; font-weight: 400; text-align: right; }
+            .summary { margin-top: 10px; break-inside: avoid; page-break-inside: avoid; }
+            .summary > tbody > tr > td { width: 50%; padding: 6px; }
+            .section-title { margin: 0 0 4px; font-size: 9.5px; text-transform: uppercase; color: #475569; letter-spacing: 0.5px; font-weight: 700; }
+            .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; }
         </style></head><body>
-        ${pagesHtml.join('')}
-        <table style="page-break-before: always;">
-            <tr>
-                <td style="padding:4px 6px;border:1px solid #000;width:50%;vertical-align:top;">
-                    <div class="section-title" style="margin-bottom:4px;">Summary</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 12px;">
-                        <div>Total Challans: <strong>${summary.total_challans}</strong></div>
-                        <div>Total Qty: <strong>${fmtNum(summary.total_qty)}</strong></div>
-                        <div>Total Amount: <strong>Tk ${fmt$(summary.total_amount)}</strong></div>
-                    </div>
-                </td>
-                <td style="padding:4px 6px;border:1px solid #000;width:50%;vertical-align:top;">
-                    <div class="section-title" style="margin-bottom:4px;">Section-wise Total Value</div>
-                    <table style="width:100%;border-collapse:collapse;">
-                        <tr>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;">All Challans (${summary.total_challans})</td>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:right;">Tk ${fmt$(summary.total_amount)}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;background:#dcfce7;">Delivered (${deliveredCount})</td>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:right;background:#dcfce7;">Tk ${fmt$(summary.delivered_amount)}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;background:#fef9c3;">Dispatched (${dispatchedCount})</td>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:right;background:#fef9c3;">Tk ${fmt$(summary.dispatched_amount)}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;background:#eff6ff;">Pending (${pendingCount})</td>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:right;background:#eff6ff;">Tk ${fmt$(summary.pending_amount)}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;background:#f1f5f9;">Cancelled (${cancelledCount})</td>
-                            <td style="padding:3px 6px;border:1px solid #000;font-size:10px;text-align:right;background:#f1f5f9;">Tk ${fmt$(summary.cancelled_amount)}</td>
-                        </tr>
-                    </table>
-                </td>
-            </tr>
+        <table class="report">
+            <thead>
+                <tr class="report-head">
+                    <th colspan="11">
+                        <div class="head-row">
+                            <div>
+                                <div class="title">Challan Report</div>
+                                <div class="company">M/S Noor Hotel and Restaurant</div>
+                            </div>
+                            <div class="filters">${describeFilters()}</div>
+                        </div>
+                    </th>
+                </tr>
+                <tr class="columns">
+                    <th class="center" style="width:24px;">#</th>
+                    <th>Challan No</th>
+                    <th class="center" style="width:62px;">Date</th>
+                    <th class="nowrap">PO Code</th>
+                    <th>Name</th>
+                    <th>Customer PO</th>
+                    <th>Party</th>
+                    <th>Address</th>
+                    <th class="num" style="width:50px;">Qty</th>
+                    <th class="num" style="width:74px;">Amount</th>
+                    <th class="center" style="width:62px;">Status</th>
+                </tr>
+            </thead>
+            ${allRows.map((r, i) => buildRowHtml(r, i)).join('')}
         </table>
-        <div class="footer">Generated by M/S Noor Hotel and Restaurant</div>
+
+        <table class="summary">
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="section-title">Summary</div>
+                        <div class="summary-grid">
+                            <div>Total Challans: <strong>${summary.total_challans}</strong></div>
+                            <div>Total Qty: <strong>${fmtNum(summary.total_qty)}</strong></div>
+                            <div>Total Amount: <strong>Tk ${fmt$(summary.total_amount)}</strong></div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="section-title">Section-wise Total Value</div>
+                        <table>
+                            ${summaryRow(`All Challans (${summary.total_challans})`, summary.total_amount, '#fff')}
+                            ${summaryRow(`Delivered (${summary.delivered_count})`, summary.delivered_amount, '#dcfce7')}
+                            ${summaryRow(`Dispatched (${summary.dispatched_count})`, summary.dispatched_amount, '#fef9c3')}
+                            ${summaryRow(`Pending (${summary.pending_count})`, summary.pending_amount, '#eff6ff')}
+                            ${summaryRow(`Cancelled (${summary.cancelled_count})`, summary.cancelled_amount, '#f1f5f9')}
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
         </body></html>`;
 
         const win = window.open('', '_blank', 'width=1100,height=600');
@@ -369,7 +398,7 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
             if (search.trim()) params.set('search', search.trim());
             if (dateFrom) params.set('date_from', dateFrom);
             if (dateTo) params.set('date_to', dateTo);
-            params.set('per_page', '1000');
+            params.set('all', '1');
             const res = await fetch(`/api/reports/challan?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -405,7 +434,7 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
         }));
 
         const itemRows = allRows.flatMap((r) =>
-            (r.items || []).map((it) => ({
+            deliveredItems(r).map((it) => ({
                 'Challan No': r.challan_number,
                 Date: fmtDate(r.date),
                 Name: r.product_name,
@@ -678,8 +707,8 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody>
-                                                                        {r.items && r.items.length > 0 ? (
-                                                                            r.items.map((it) => (
+                                                                        {deliveredItems(r).length > 0 ? (
+                                                                            deliveredItems(r).map((it) => (
                                                                                 <tr key={it.id} className="border-b border-border last:border-0">
                                                                                     <td className="px-3 py-2">
                                                                                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${mealBadge[it.meal_type] || 'bg-muted text-muted-foreground'}`}>
@@ -730,7 +759,7 @@ export default function ChallanReport({ parties }: { parties: Party[] }) {
                                 }}
                                 className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none"
                             >
-                                {[10, 20, 30, 50, 100].map((n) => (
+                                {[10, 25, 50, 100, 250, 500].map((n) => (
                                     <option key={n} value={n}>
                                         {n} / page
                                     </option>

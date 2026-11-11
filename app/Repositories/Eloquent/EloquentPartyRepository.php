@@ -32,7 +32,10 @@ class EloquentPartyRepository implements PartyRepositoryInterface
         $party->delete();
     }
 
-    public function search(string $query, array $filters = []): LengthAwarePaginator
+    /**
+     * @param  array{party_type?: string, agreement_type?: string, end_date_from?: string, end_date_to?: string}  $filters
+     */
+    public function search(string $query, array $filters = [], int $perPage = 10): LengthAwarePaginator
     {
         $queryBuilder = $this->model->query();
 
@@ -45,12 +48,20 @@ class EloquentPartyRepository implements PartyRepositoryInterface
             });
         }
 
-        foreach ($filters as $key => $value) {
-            if ($value !== null && $value !== '') {
-                $queryBuilder->where($key, $value);
+        foreach (['party_type', 'agreement_type'] as $column) {
+            if (! empty($filters[$column])) {
+                $queryBuilder->where($column, $filters[$column]);
             }
         }
 
-        return $queryBuilder->latest()->paginate(10);
+        if (! empty($filters['end_date_from'])) {
+            $queryBuilder->whereDate('end_date', '>=', $filters['end_date_from']);
+        }
+
+        if (! empty($filters['end_date_to'])) {
+            $queryBuilder->whereDate('end_date', '<=', $filters['end_date_to']);
+        }
+
+        return $queryBuilder->latest()->paginate($perPage)->withQueryString();
     }
 }

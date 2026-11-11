@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import {
     Pencil,
     Plus,
@@ -28,6 +28,8 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
+import type { SummaryChallanData } from '@/components/po/summary-challan';
+import SummaryChallanDialog from '@/components/po/summary-challan-dialog';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -53,6 +55,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { apiRequest } from '@/lib/api';
+import { invoices as invoicesPage } from '@/routes';
 
 type Party = { id: number; party_name: string };
 
@@ -90,6 +94,7 @@ type Product = {
     meals_subtotal?: number;
     challans_count?: number;
     invoiced_challans_count?: number;
+    invoices?: { id: number; invoice_number: string }[];
 };
 
 type MealRow = {
@@ -654,7 +659,7 @@ function ProductForm({
                                                 <button
                                                     key={p.id}
                                                     type="button"
-                                                    className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent ${partyId === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    className={`w-full overflow-hidden rounded-sm px-2 py-1.5 text-left text-xs text-ellipsis whitespace-nowrap transition-colors hover:bg-accent ${partyId === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                     onClick={() => {
                                                         setPartyId(
                                                             String(p.id),
@@ -867,13 +872,21 @@ function ProductForm({
     );
 }
 
-export default function PurchaseOrders({ parties }: { parties: Party[] }) {
+export default function PurchaseOrders({
+    parties,
+    focusPo = null,
+}: {
+    parties: Party[];
+    focusPo?: { id: number; code: string } | null;
+}) {
     const [products, setProducts] = useState<Product[]>([]);
+    const [summaryData, setSummaryData] =
+        useState<SummaryChallanData | null>(null);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(10);
     const [filter, setFilter] = useState('all');
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(focusPo?.code ?? '');
     const [partyFilter, setPartyFilter] = useState('');
     const [partyFilterOpen, setPartyFilterOpen] = useState(false);
     const [partyFilterSearch, setPartyFilterSearch] = useState('');
@@ -1056,6 +1069,14 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
         }
     };
 
+    useEffect(() => {
+        if (focusPo) {
+            openView({ id: focusPo.id } as Product);
+        }
+        // Open the linked PO once, when arriving from another page.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusPo?.id]);
+
     const openDelete = (product: Product) => {
         setDeletingProduct(product);
         setDeleteOpen(true);
@@ -1112,7 +1133,12 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                 0,
             );
             const netRemaining = totalRemaining - totalOverDelivered;
-            const remainingLabel = netRemaining > 0 ? `Remaining: <strong>${netRemaining}</strong>` : netRemaining < 0 ? `Over-delivered: <strong>${Math.abs(netRemaining)}</strong>` : `Fully delivered`;
+            const remainingLabel =
+                netRemaining > 0
+                    ? `Remaining: <strong>${netRemaining}</strong>`
+                    : netRemaining < 0
+                      ? `Over-delivered: <strong>${Math.abs(netRemaining)}</strong>`
+                      : `Fully delivered`;
 
             const html = `<!DOCTYPE html>
 <html>
@@ -1417,114 +1443,17 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
 
     const printSummaryChallans = async (product: Product) => {
         try {
-            const res = await fetch(
+            const { body } = await apiRequest<SummaryChallanData>(
                 `/api/products/${product.id}/summary-challan`,
-                { headers: { 'X-Requested-With': 'XMLHttpRequest' } },
             );
-            const data = await res.json();
-            const s = data.data;
 
-            if (!s) {
+            if (!body.data) {
                 toast.error('Failed to load summary challan');
 
                 return;
             }
 
-            const rows = (s.items || [])
-                .filter((it: { quantity: number }) => it.quantity > 0)
-                .map(
-                    (it: { description: string; quantity: number }, i: number) =>
-                        `<tr>
-                            <td style="width:30px;padding:6px 8px;border:1px solid #000;text-align:center;">${i + 1}</td>
-                            <td style="padding:6px 12px;border:1px solid #000;">${it.description}</td>
-                            <td style="width:80px;padding:6px 8px;border:1px solid #000;text-align:center;">${it.quantity}</td>
-                        </tr>`,
-                )
-                .join('');
-
-            const html = `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8"/>
-    <title>Delivery Challan ${s.ref}</title>
-    <style>
-        body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; margin: 0; padding: 0; }
-        h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; text-align: center; }
-        .underline { border-bottom: 3px solid #2563eb; width: 200px; margin: 6px auto 0; }
-        .sub { color: #64748b; margin: 4px 0 0; font-size: 12px; text-align: center; }
-        table.info { width: 100%; border-collapse: collapse; margin: 20px 0 16px; font-size: 13px; }
-        table.info td { border: none; padding: 4px 0; vertical-align: top; }
-        table.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-        table.items th { background: #f1f5f9; padding: 8px 12px; border: 1px solid #000; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
-        .notes { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: #64748b; }
-        .footer { text-align: center; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; margin-top: 40px; }
-        .signatures { margin-top: 30px; }
-    </style>
-</head>
-<body>
-    <div style="text-align:center;margin-bottom:20px;">
-        <h1>DELIVERY CHALLAN</h1>
-        <div class="underline"></div>
-        <p class="sub">Noor Hotel PRG</p>
-    </div>
-    <table class="info">
-        <tr>
-            <td style="width:60%;">
-                <strong>Deliver to:</strong> ${s.client}<br/>
-                <strong>Client:</strong> ${s.client}<br/>
-                <strong>PO:</strong> ${s.po_number || '—'}
-            </td>
-            <td style="width:40%;text-align:right;">
-                <strong>Ref:</strong> ${s.ref}<br/>
-                <strong>Delivery Date:</strong> ${s.delivery_date}
-            </td>
-        </tr>
-    </table>
-    <div style="margin-bottom:10px;"><span style="color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Items to be Delivered:</span></div>
-    <table class="items">
-        <thead>
-            <tr>
-                <th style="width:30px;">SL</th>
-                <th>Description</th>
-                <th style="width:80px;text-align:center;">Quantity</th>
-            </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-    </table>
-    ${s.notes ? `<div class="notes"><strong>Note:</strong> ${s.notes}</div>` : ''}
-    <div class="signatures">
-        <table style="width:100%;border:none;">
-            <tr>
-                <td style="width:45%;border:none;text-align:center;padding:0;">
-                    <div style="height:40px;"></div>
-                    <div style="border-top:1px solid #1e293b;"></div>
-                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Received By</div>
-                </td>
-                <td style="width:10%;border:none;"></td>
-                <td style="width:45%;border:none;text-align:center;padding:0;">
-                    <div style="height:40px;"></div>
-                    <div style="border-top:1px solid #1e293b;"></div>
-                    <div style="padding-top:6px;font-weight:bold;font-size:12px;">Prepared By</div>
-                </td>
-            </tr>
-        </table>
-    </div>
-    <div class="footer">Print Date: ${new Date().toLocaleDateString('en-GB')}</div>
-</body>
-</html>`;
-
-            const win = window.open('', '_blank');
-
-            if (win) {
-                win.document.write(html);
-                win.document.close();
-                win.focus();
-
-                setTimeout(() => {
-                    win.focus();
-                    win.print();
-                }, 500);
-            }
+            setSummaryData(body.data);
         } catch {
             toast.error('Failed to load summary challan');
         }
@@ -1783,7 +1712,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                     <div className="mt-1 max-h-60 overflow-auto">
                                         <button
                                             type="button"
-                                            className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
+                                            className={`w-full overflow-hidden rounded-sm px-3 py-2 text-left text-xs text-ellipsis whitespace-nowrap transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
                                             onClick={() => {
                                                 setPartyFilter('');
                                                 setPartyFilterOpen(false);
@@ -1802,7 +1731,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                 <button
                                                     key={p.id}
                                                     type="button"
-                                                    className={`w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-sm px-3 py-2 text-left text-xs transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    className={`w-full overflow-hidden rounded-sm px-3 py-2 text-left text-xs text-ellipsis whitespace-nowrap transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
                                                     onClick={() => {
                                                         setPartyFilter(
                                                             String(p.id),
@@ -1883,6 +1812,9 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                         Status
                                     </th>
                                     <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Invoice
+                                    </th>
+                                    <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                                         Reminder
                                     </th>
                                     <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
@@ -1894,7 +1826,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                 {products.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={11}
+                                            colSpan={12}
                                             className="px-4 py-16 text-center"
                                         >
                                             <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -1916,10 +1848,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                             p.total_delivered || 0;
                                         const remaining =
                                             p.total_remaining ??
-                                            Math.max(
-                                                0,
-                                                ordered - delivered,
-                                            );
+                                            Math.max(0, ordered - delivered);
                                         const overDelivered =
                                             p.total_over_delivered ?? 0;
                                         const status = getDeliveryStatus(p);
@@ -2025,6 +1954,43 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                                             </div>
                                                         )}
                                                     </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-xs">
+                                                    {p.invoices &&
+                                                    p.invoices.length > 0 ? (
+                                                        <div className="flex flex-col gap-0.5">
+                                                            {p.invoices.map(
+                                                                (invoice) => (
+                                                                    <Link
+                                                                        key={
+                                                                            invoice.id
+                                                                        }
+                                                                        href={
+                                                                            invoicesPage(
+                                                                                {
+                                                                                    query: {
+                                                                                        invoice:
+                                                                                            invoice.id,
+                                                                                    },
+                                                                                },
+                                                                            )
+                                                                                .url
+                                                                        }
+                                                                        className="font-mono font-medium whitespace-nowrap text-primary underline-offset-2 hover:underline"
+                                                                        title={`Open ${invoice.invoice_number}`}
+                                                                    >
+                                                                        {
+                                                                            invoice.invoice_number
+                                                                        }
+                                                                    </Link>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground/40">
+                                                            —
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-4 py-3">
                                                     {p.reminder_at ? (
@@ -2488,8 +2454,7 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                                             {viewingProduct.meals.reduce(
                                                 (s, m) =>
                                                     s +
-                                                    (m.delivered_quantity ||
-                                                        0),
+                                                    (m.delivered_quantity || 0),
                                                 0,
                                             )}{' '}
                                             delivered
@@ -2766,6 +2731,15 @@ export default function PurchaseOrders({ parties }: { parties: Party[] }) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <SummaryChallanDialog
+                data={summaryData}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setSummaryData(null);
+                    }
+                }}
+            />
         </>
     );
 }

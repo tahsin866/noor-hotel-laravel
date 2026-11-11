@@ -79,6 +79,16 @@
             <td colspan="3">{{ $party->notes }}</td>
         </tr>
         @endif
+        @if(! empty($party->requirements))
+        <tr>
+            <td class="label">Bill Requirements</td>
+            <td colspan="3">
+                @foreach($party->requirements as $requirement)
+                    {{ $loop->iteration }}. {{ $requirement }}@if(! $loop->last)<br>@endif
+                @endforeach
+            </td>
+        </tr>
+        @endif
     </table>
 
     <div style="text-align:center;font-size:10px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:20px;">

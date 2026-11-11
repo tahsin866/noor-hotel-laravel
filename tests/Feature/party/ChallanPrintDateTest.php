@@ -106,3 +106,38 @@ test('challan show returns show_print_date', function () {
     $response->assertSuccessful();
     expect($response->json('data.show_print_date'))->toBeFalse();
 });
+
+test('creating a challan requires a manually selected date', function () {
+    actingAsChallanUser($this);
+    $product = createChallanPrintProduct();
+    $meal = $product->meals()->first();
+
+    $this->postJson('/api/challans', [
+        'product_id' => $product->id,
+        'address' => '123 Main Street',
+        'items' => [[
+            'product_meal_id' => $meal->id,
+            'quantity' => 5,
+        ]],
+    ])->assertUnprocessable()->assertJsonValidationErrors('date');
+
+    expect(Challan::query()->count())->toBe(0);
+});
+
+test('creating a challan keeps a back-dated date as selected', function () {
+    actingAsChallanUser($this);
+    $product = createChallanPrintProduct();
+    $meal = $product->meals()->first();
+
+    $this->postJson('/api/challans', [
+        'product_id' => $product->id,
+        'date' => '2025-12-31',
+        'address' => '123 Main Street',
+        'items' => [[
+            'product_meal_id' => $meal->id,
+            'quantity' => 5,
+        ]],
+    ])->assertSuccessful();
+
+    expect((string) Challan::query()->first()->date)->toStartWith('2025-12-31');
+});

@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 
 class ChallanReportController extends Controller
 {
+    use ResolvesReportPerPage;
+
     public function index(Request $request)
     {
         $partyId = $request->get('party_id');
@@ -16,11 +18,14 @@ class ChallanReportController extends Controller
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
 
-        $perPage = (int) $request->get('per_page', 10);
-        $perPage = in_array($perPage, [10, 20, 30, 50, 100, 1000]) ? $perPage : 10;
-
         $query = Challan::query()
-            ->with(['product', 'product.party', 'items.productMeal'])
+            ->with([
+                'product',
+                'product.party',
+                'items' => fn ($items) => $items->where('quantity', '>', 0)->orderBy('id'),
+                'items.productMeal',
+            ])
+            ->whereHas('items', fn ($items) => $items->where('quantity', '>', 0))
             ->orderByDesc('id');
 
         if ($partyId) {
@@ -56,7 +61,7 @@ class ChallanReportController extends Controller
         }
 
         $allChallans = $query->get();
-        $rows = $query->paginate($perPage);
+        $rows = $query->paginate($this->resolveReportPerPage($request, $allChallans->count()));
 
         $mappedRows = collect($rows->items())->map(fn ($challan) => $this->mapRow($challan))->values();
 

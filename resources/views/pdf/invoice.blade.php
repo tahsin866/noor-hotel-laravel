@@ -114,6 +114,9 @@
             </tr>
         </table>
         <div class="in-words"><strong>In Words:</strong> {{ $total_in_words }}</div>
+        @if($invoice->show_terms)
+            <div style="text-align:left;margin-top:8px;font-size:11px;color:#475569;"><strong>Terms &amp; Conditions:</strong> Please note that the applicable Government VAT and Tax are included in the quoted price, and transportation costs are also included in the invoice value.</div>
+        @endif
     </div>
 
     <div style="position:fixed;bottom:10mm;left:10mm;right:10mm;">

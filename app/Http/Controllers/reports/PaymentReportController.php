@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Storage;
 
 class PaymentReportController extends Controller
 {
+    use ResolvesReportPerPage;
+
     public function index(Request $request)
     {
         $partyId = $request->get('party_id');
@@ -19,9 +21,6 @@ class PaymentReportController extends Controller
         $search = $request->get('search');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
-
-        $perPage = (int) $request->get('per_page', 10);
-        $perPage = in_array($perPage, [10, 20, 30, 50, 100, 1000]) ? $perPage : 10;
 
         $includePayments = $status !== 'unpaid';
         $includeUnpaid = in_array($status, [null, '', 'all', 'unpaid'], true)
@@ -48,7 +47,8 @@ class PaymentReportController extends Controller
 
             if ($search) {
                 $paymentQuery->where(function ($q) use ($search) {
-                    $q->where('payment_history.reference_number', 'like', "%{$search}%")
+                    $q->where('payment_history.payment_number', 'like', "%{$search}%")
+                        ->orWhere('payment_history.reference_number', 'like', "%{$search}%")
                         ->orWhere('payment_history.notes', 'like', "%{$search}%")
                         ->orWhereHas('invoice', function ($iq) use ($search) {
                             $iq->where('invoices.invoice_number', 'like', "%{$search}%")
@@ -124,6 +124,7 @@ class PaymentReportController extends Controller
 
         $summary = $this->buildSummary($paymentRows, $unpaidRows, $chalanTotal, $paidTotal, $chalanPending, $chalanDispatched, $chalanDelivered, $chalanCancelled);
 
+        $perPage = $this->resolveReportPerPage($request, $allRows->count());
         $currentPage = max(1, (int) $request->get('page', 1));
         $pageItems = $allRows->forPage($currentPage, $perPage)->values();
         $lastPage = max(1, (int) ceil($allRows->count() / $perPage));
@@ -147,6 +148,7 @@ class PaymentReportController extends Controller
     {
         return [
             'id' => $payment->id,
+            'payment_number' => $payment->payment_number,
             'invoice_id' => $payment->invoice_id,
             'invoice_number' => $payment->invoice->invoice_number ?? '-',
             'party_id' => $payment->invoice->party_id ?? null,
@@ -173,6 +175,7 @@ class PaymentReportController extends Controller
     {
         return [
             'id' => $invoice->id,
+            'payment_number' => null,
             'invoice_id' => $invoice->id,
             'invoice_number' => $invoice->invoice_number,
             'party_id' => $invoice->party_id,

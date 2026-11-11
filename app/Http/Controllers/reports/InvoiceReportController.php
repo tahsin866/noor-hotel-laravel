@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 
 class InvoiceReportController extends Controller
 {
+    use ResolvesReportPerPage;
+
     public function index(Request $request)
     {
         $partyId = $request->get('party_id');
@@ -15,9 +17,6 @@ class InvoiceReportController extends Controller
         $search = $request->get('search');
         $dateFrom = $request->get('date_from');
         $dateTo = $request->get('date_to');
-
-        $perPage = (int) $request->get('per_page', 10);
-        $perPage = in_array($perPage, [10, 20, 30, 50, 100, 1000]) ? $perPage : 10;
 
         $query = Invoice::query()
             ->with(['party', 'items.product', 'challans.product.party'])
@@ -54,7 +53,7 @@ class InvoiceReportController extends Controller
         }
 
         $allInvoices = $query->get();
-        $rows = $query->paginate($perPage);
+        $rows = $query->paginate($this->resolveReportPerPage($request, $allInvoices->count()));
 
         $mappedRows = collect($rows->items())->map(fn ($invoice) => $this->mapRow($invoice))->values();
 

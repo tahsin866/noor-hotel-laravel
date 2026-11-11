@@ -22,6 +22,7 @@ class PartyResource extends JsonResource
             'start_date' => $this->start_date,
             'end_date' => $this->end_date,
             'notes' => $this->notes,
+            'requirements' => $this->requirements ?? [],
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, Link } from '@inertiajs/react';
 import {
     ChevronLeft,
     ChevronRight,
@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import Heading from '@/components/heading';
+import ReceivedPaymentsTable from '@/components/received-payments-table';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -28,6 +29,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { invoices as invoicesPage } from '@/routes';
 
 type Party = { id: number; party_name: string };
 
@@ -340,6 +342,7 @@ function reducePct(amount: number | undefined, total: number | undefined) {
 }
 
 export default function Payments({ parties }: { parties: Party[] }) {
+    const [view, setView] = useState<'invoices' | 'payments'>('invoices');
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -347,6 +350,8 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
     const [partyFilter, setPartyFilter] = useState('');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
     const [partyFilterOpen, setPartyFilterOpen] = useState(false);
     const [partyFilterSearch, setPartyFilterSearch] = useState('');
     const [processing, setProcessing] = useState<number | null>(null);
@@ -421,6 +426,14 @@ export default function Payments({ parties }: { parties: Party[] }) {
                 params.set('search', search);
             }
 
+            if (dateFrom) {
+                params.set('date_from', dateFrom);
+            }
+
+            if (dateTo) {
+                params.set('date_to', dateTo);
+            }
+
             const res = await fetch(`/api/invoices?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -430,7 +443,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
         } catch {
             toast.error('Failed to load invoices');
         }
-    }, [page, limit, filter, partyFilter, search]);
+    }, [page, limit, filter, partyFilter, search, dateFrom, dateTo]);
 
     useEffect(() => {
         fetchInvoices();
@@ -557,8 +570,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
     const toggleAllPage = () => {
         const pageIds = invoices.map((i) => i.id);
         const allChecked =
-            pageIds.length > 0 &&
-            pageIds.every((id) => selected.includes(id));
+            pageIds.length > 0 && pageIds.every((id) => selected.includes(id));
 
         setSelected((prev) =>
             allChecked
@@ -569,9 +581,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
 
     const toggleSelect = (id: number) => {
         setSelected((prev) =>
-            prev.includes(id)
-                ? prev.filter((x) => x !== id)
-                : [...prev, id],
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
         );
     };
 
@@ -615,9 +625,7 @@ export default function Payments({ parties }: { parties: Party[] }) {
 
             setDeleteOpen(false);
             setDeleteIds([]);
-            setSelected((prev) =>
-                prev.filter((id) => !deleteIds.includes(id)),
-            );
+            setSelected((prev) => prev.filter((id) => !deleteIds.includes(id)));
             fetchInvoices();
         } catch {
             toast.error('Failed to delete invoice(s)');
@@ -1044,75 +1052,88 @@ export default function Payments({ parties }: { parties: Party[] }) {
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-end gap-3">
-                    <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
-                        {statusFilters.map((f) => (
-                            <button
-                                key={f.v}
-                                onClick={() => {
-                                    setFilter(f.v);
-                                    setPage(1);
-                                }}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${filter === f.v ? 'border border-border bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                            >
-                                {f.l}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="relative">
+                <div
+                    role="tablist"
+                    aria-label="Payment views"
+                    className="inline-flex w-fit items-center gap-1 rounded-lg border border-border bg-muted/40 p-1"
+                >
+                    {(
+                        [
+                            { v: 'invoices', l: 'Invoices' },
+                            { v: 'payments', l: 'Received Payments' },
+                        ] as const
+                    ).map((tab) => (
                         <button
+                            key={tab.v}
                             type="button"
-                            onClick={() => setPartyFilterOpen((v) => !v)}
-                            className="flex h-8 w-56 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                            role="tab"
+                            aria-selected={view === tab.v}
+                            onClick={() => setView(tab.v)}
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${view === tab.v ? 'border border-border bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         >
-                            <span className="whitespace-nowrap">
-                                {partyFilter
-                                    ? parties.find(
-                                          (p) => p.id === Number(partyFilter),
-                                      )?.party_name || 'All Parties'
-                                    : 'All Parties'}
-                            </span>
-                            <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+                            {tab.l}
                         </button>
-                        {partyFilterOpen && (
-                            <>
-                                <div className="absolute z-50 mt-1 w-full min-w-56 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
-                                    <Input
-                                        autoFocus
-                                        placeholder="Search party..."
-                                        value={partyFilterSearch}
-                                        onChange={(e) =>
-                                            setPartyFilterSearch(e.target.value)
-                                        }
-                                        className="h-7 text-xs"
-                                    />
-                                    <div className="mt-1 max-h-60 overflow-auto">
-                                        <button
-                                            type="button"
-                                            className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
-                                            onClick={() => {
-                                                setPartyFilter('');
-                                                setPartyFilterOpen(false);
-                                                setPartyFilterSearch('');
-                                                setPage(1);
-                                            }}
-                                        >
-                                            All Parties
-                                        </button>
-                                        {filteredFilterParties.length === 0 ? (
-                                            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-                                                No parties found
-                                            </div>
-                                        ) : (
-                                            filteredFilterParties.map((p) => (
+                    ))}
+                </div>
+
+                {view === 'payments' ? (
+                    <ReceivedPaymentsTable parties={parties} />
+                ) : (
+                    <>
+                        <div className="flex flex-wrap items-end gap-3">
+                            <div className="inline-flex items-center gap-1 rounded-lg border border-border bg-muted/40 p-1">
+                                {statusFilters.map((f) => (
+                                    <button
+                                        key={f.v}
+                                        onClick={() => {
+                                            setFilter(f.v);
+                                            setPage(1);
+                                        }}
+                                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${filter === f.v ? 'border border-border bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                    >
+                                        {f.l}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        setPartyFilterOpen((v) => !v)
+                                    }
+                                    className="flex h-8 w-56 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors hover:bg-accent focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                                >
+                                    <span className="whitespace-nowrap">
+                                        {partyFilter
+                                            ? parties.find(
+                                                  (p) =>
+                                                      p.id ===
+                                                      Number(partyFilter),
+                                              )?.party_name || 'All Parties'
+                                            : 'All Parties'}
+                                    </span>
+                                    <ChevronDown className="size-3.5 shrink-0 opacity-50" />
+                                </button>
+                                {partyFilterOpen && (
+                                    <>
+                                        <div className="absolute z-50 mt-1 w-full min-w-56 overflow-hidden rounded-md border border-border bg-popover p-1 shadow-md">
+                                            <Input
+                                                autoFocus
+                                                placeholder="Search party..."
+                                                value={partyFilterSearch}
+                                                onChange={(e) =>
+                                                    setPartyFilterSearch(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                className="h-7 text-xs"
+                                            />
+                                            <div className="mt-1 max-h-60 overflow-auto">
                                                 <button
-                                                    key={p.id}
                                                     type="button"
-                                                    className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                    className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === '' ? 'bg-accent font-medium' : ''}`}
                                                     onClick={() => {
-                                                        setPartyFilter(
-                                                            String(p.id),
-                                                        );
+                                                        setPartyFilter('');
                                                         setPartyFilterOpen(
                                                             false,
                                                         );
@@ -1122,343 +1143,447 @@ export default function Payments({ parties }: { parties: Party[] }) {
                                                         setPage(1);
                                                     }}
                                                 >
-                                                    {p.party_name}
+                                                    All Parties
                                                 </button>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                                <div
-                                    className="fixed inset-0 z-40"
-                                    onClick={() => {
-                                        setPartyFilterOpen(false);
-                                        setPartyFilterSearch('');
-                                    }}
-                                />
-                            </>
-                        )}
-                    </div>
-                    <div className="relative">
-                        <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Search by invoice # or party..."
-                            value={search}
-                            onChange={(e) => {
-                                setSearch(e.target.value);
-                                setPage(1);
-                            }}
-                            className="h-8 w-56 pl-8 text-xs"
-                        />
-                    </div>
-                    {(filter !== 'all' || partyFilter || search) && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs"
-                            onClick={() => {
-                                setFilter('all');
-                                setPartyFilter('');
-                                setSearch('');
-                                setPage(1);
-                            }}
-                        >
-                            <RotateCcw className="mr-1.5 size-3.5" />
-                            Reset
-                        </Button>
-                    )}
-                    <span className="ml-auto text-xs font-medium text-muted-foreground">
-                        {from}–{to} of {total} invoice{total === 1 ? '' : 's'}
-                    </span>
-                    <select
-                        value={limit}
-                        onChange={(e) => {
-                            setLimit(Number(e.target.value));
-                            setPage(1);
-                        }}
-                        className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
-                    >
-                        <option value={10}>10 / page</option>
-                        <option value={20}>20 / page</option>
-                        <option value={50}>50 / page</option>
-                        <option value={100}>100 / page</option>
-                    </select>
-                </div>
-
-                <div className="relative flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 shadow-sm dark:border-sidebar-border">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-sidebar-border/70 bg-muted/50 dark:border-sidebar-border">
-                                    <th className="w-10 px-4 py-3">
-                                        <input
-                                            type="checkbox"
-                                            checked={
-                                                invoices.length > 0 &&
-                                                invoices.every((i) =>
-                                                    selected.includes(i.id),
-                                                )
-                                            }
-                                            onChange={toggleAllPage}
-                                            className="rounded"
-                                            aria-label="Select all invoices"
-                                        />
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Number
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Party
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Date
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Due Date
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Due
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Amount
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Paid
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        VAT Reduce
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Attach
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Status
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Action
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {invoices.length === 0 ? (
-                                    <tr>
-                                        <td
-                                            colSpan={12}
-                                            className="px-4 py-16 text-center"
-                                        >
-                                            <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                                <CreditCard className="size-8 opacity-40" />
-                                                <p className="text-sm font-medium">
-                                                    No invoices found
-                                                </p>
+                                                {filteredFilterParties.length ===
+                                                0 ? (
+                                                    <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                                        No parties found
+                                                    </div>
+                                                ) : (
+                                                    filteredFilterParties.map(
+                                                        (p) => (
+                                                            <button
+                                                                key={p.id}
+                                                                type="button"
+                                                                className={`w-full rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${partyFilter === String(p.id) ? 'bg-accent font-medium' : ''}`}
+                                                                onClick={() => {
+                                                                    setPartyFilter(
+                                                                        String(
+                                                                            p.id,
+                                                                        ),
+                                                                    );
+                                                                    setPartyFilterOpen(
+                                                                        false,
+                                                                    );
+                                                                    setPartyFilterSearch(
+                                                                        '',
+                                                                    );
+                                                                    setPage(1);
+                                                                }}
+                                                            >
+                                                                {p.party_name}
+                                                            </button>
+                                                        ),
+                                                    )
+                                                )}
                                             </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    invoices.map((inv) => (
-                                        <tr
-                                            key={inv.id}
-                                            className="border-b border-sidebar-border/70 transition-colors last:border-0 hover:bg-muted/30 dark:border-sidebar-border"
-                                        >
-                                            <td className="px-4 py-3 text-center">
+                                        </div>
+                                        <div
+                                            className="fixed inset-0 z-40"
+                                            onClick={() => {
+                                                setPartyFilterOpen(false);
+                                                setPartyFilterSearch('');
+                                            }}
+                                        />
+                                    </>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search by invoice # or party..."
+                                    value={search}
+                                    onChange={(e) => {
+                                        setSearch(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    className="h-8 w-56 pl-8 text-xs"
+                                />
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Input
+                                    type="date"
+                                    value={dateFrom}
+                                    max={dateTo || undefined}
+                                    onChange={(e) => {
+                                        setDateFrom(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    aria-label="From date"
+                                    title="From date"
+                                    className="h-8 w-36 text-xs"
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    to
+                                </span>
+                                <Input
+                                    type="date"
+                                    value={dateTo}
+                                    min={dateFrom || undefined}
+                                    onChange={(e) => {
+                                        setDateTo(e.target.value);
+                                        setPage(1);
+                                    }}
+                                    aria-label="To date"
+                                    title="To date"
+                                    className="h-8 w-36 text-xs"
+                                />
+                            </div>
+                            {(filter !== 'all' ||
+                                partyFilter ||
+                                search ||
+                                dateFrom ||
+                                dateTo) && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs"
+                                    onClick={() => {
+                                        setFilter('all');
+                                        setPartyFilter('');
+                                        setSearch('');
+                                        setDateFrom('');
+                                        setDateTo('');
+                                        setPage(1);
+                                    }}
+                                >
+                                    <RotateCcw className="mr-1.5 size-3.5" />
+                                    Reset
+                                </Button>
+                            )}
+                            <span className="ml-auto text-xs font-medium text-muted-foreground">
+                                {from}–{to} of {total} invoice
+                                {total === 1 ? '' : 's'}
+                            </span>
+                            <select
+                                value={limit}
+                                onChange={(e) => {
+                                    setLimit(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                className="flex h-8 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                            >
+                                <option value={10}>10 / page</option>
+                                <option value={20}>20 / page</option>
+                                <option value={50}>50 / page</option>
+                                <option value={100}>100 / page</option>
+                            </select>
+                        </div>
+
+                        <div className="relative flex-1 overflow-hidden rounded-xl border border-sidebar-border/70 shadow-sm dark:border-sidebar-border">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-sidebar-border/70 bg-muted/50 dark:border-sidebar-border">
+                                            <th className="w-10 px-4 py-3">
                                                 <input
                                                     type="checkbox"
-                                                    checked={selected.includes(
-                                                        inv.id,
-                                                    )}
-                                                    onChange={() =>
-                                                        toggleSelect(inv.id)
+                                                    checked={
+                                                        invoices.length > 0 &&
+                                                        invoices.every((i) =>
+                                                            selected.includes(
+                                                                i.id,
+                                                            ),
+                                                        )
                                                     }
+                                                    onChange={toggleAllPage}
                                                     className="rounded"
-                                                    aria-label={`Select ${inv.invoice_number}`}
+                                                    aria-label="Select all invoices"
                                                 />
-                                            </td>
-                                            <td className="px-4 py-3 font-mono text-xs font-semibold">
-                                                {inv.invoice_number}
-                                            </td>
-                                            <td className="px-4 py-3 text-xs font-medium">
-                                                {inv.party_name || '—'}
-                                            </td>
-                                            <td className="px-4 py-3 text-xs text-muted-foreground">
-                                                {fmtDate(inv.date)}
-                                            </td>
-                                            <td className="px-4 py-3 text-xs text-muted-foreground">
-                                                {fmtDate(inv.due_date)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">
-                                                Tk {fmt$(inv.due_amount ?? 0)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">
-                                                Tk {fmt$(inv.total_amount)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-xs text-green-600 tabular-nums">
-                                                Tk {fmt$(inv.amount_paid)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-xs text-red-600 tabular-nums">
-                                                Tk {fmt$(inv.vat_reduce ?? 0)}
-                                                <span className="block text-[10px] font-normal text-muted-foreground">
-                                                    (
-                                                    {reducePct(
-                                                        inv.vat_reduce ?? 0,
-                                                        inv.total_amount,
-                                                    )}
-                                                    %)
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {inv.attachments &&
-                                                inv.attachments.length > 0 ? (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 w-7 px-0"
-                                                        title="Open attachment"
-                                                        onClick={() =>
-                                                            window.open(
-                                                                inv
-                                                                    .attachments![
-                                                                    inv
-                                                                        .attachments!
-                                                                        .length -
-                                                                        1
-                                                                ],
-                                                                '_blank',
-                                                            )
-                                                        }
-                                                    >
-                                                        <Paperclip className="size-3.5" />
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-xs text-muted-foreground">
-                                                        —
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <span
-                                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColors[inv.status] || 'bg-slate-100 text-slate-600'}`}
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Number
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Party
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Date
+                                            </th>
+                                            <th className="px-4 py-3 text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Due Date
+                                            </th>
+                                            <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Due
+                                            </th>
+                                            <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Amount
+                                            </th>
+                                            <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Paid
+                                            </th>
+                                            <th className="px-4 py-3 text-right text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                VAT Reduce
+                                            </th>
+                                            <th className="px-4 py-3 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Attach
+                                            </th>
+                                            <th className="px-4 py-3 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Status
+                                            </th>
+                                            <th className="px-4 py-3 text-center text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                                                Action
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {invoices.length === 0 ? (
+                                            <tr>
+                                                <td
+                                                    colSpan={12}
+                                                    className="px-4 py-16 text-center"
                                                 >
-                                                    {statusLabel[inv.status] ||
-                                                        inv.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    {inv.status !== 'paid' && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 text-xs text-green-600 hover:text-green-700"
-                                                            onClick={() =>
-                                                                openPayDialog(
-                                                                    inv,
+                                                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                                                        <CreditCard className="size-8 opacity-40" />
+                                                        <p className="text-sm font-medium">
+                                                            No invoices found
+                                                        </p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            invoices.map((inv) => (
+                                                <tr
+                                                    key={inv.id}
+                                                    className="border-b border-sidebar-border/70 transition-colors last:border-0 hover:bg-muted/30 dark:border-sidebar-border"
+                                                >
+                                                    <td className="px-4 py-3 text-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selected.includes(
+                                                                inv.id,
+                                                            )}
+                                                            onChange={() =>
+                                                                toggleSelect(
+                                                                    inv.id,
                                                                 )
                                                             }
+                                                            className="rounded"
+                                                            aria-label={`Select ${inv.invoice_number}`}
+                                                        />
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono text-xs font-semibold">
+                                                        <Link
+                                                            href={
+                                                                invoicesPage({
+                                                                    query: {
+                                                                        invoice:
+                                                                            inv.id,
+                                                                    },
+                                                                }).url
+                                                            }
+                                                            className="text-primary underline-offset-2 hover:underline"
+                                                            title={`Open ${inv.invoice_number}`}
                                                         >
-                                                            <CreditCard className="mr-1 size-3" />
-                                                            Pay
-                                                        </Button>
-                                                    )}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 text-xs text-blue-600 hover:text-blue-700"
-                                                        onClick={() =>
-                                                            printPayment(inv)
-                                                        }
-                                                    >
-                                                        <Printer className="mr-1 size-3" />
-                                                        Print
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 text-xs text-purple-600 hover:text-purple-700"
-                                                        onClick={() =>
-                                                            sharePayment(inv)
-                                                        }
-                                                    >
-                                                        <Share2 className="mr-1 size-3" />
-                                                        Share
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-7 text-xs text-red-600 hover:text-red-700"
-                                                        onClick={() =>
-                                                            openDelete([inv.id])
-                                                        }
-                                                    >
-                                                        <Trash2 className="mr-1 size-3" />
-                                                        Delete
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                            {invoices.length > 0 && (
-                                <tfoot>
-                                    <tr className="border-t-2 border-sidebar-border/70 bg-muted/30 dark:border-sidebar-border">
-                                        <td
-                                            colSpan={5}
-                                            className="px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase"
-                                        >
-                                            Total
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">
-                                            Tk {fmt$(totalDueAmountSum)}
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-xs font-bold tabular-nums">
-                                            Tk {fmt$(totalAmountSum)}
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-xs font-bold text-green-600 tabular-nums">
-                                            Tk {fmt$(totalPaidSum)}
-                                        </td>
-                                        <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">
-                                            Tk {fmt$(totalVatReduceSum)}
-                                            <span className="block text-[10px] font-normal text-muted-foreground">
-                                                (
-                                                {reducePct(
-                                                    totalVatReduceSum,
-                                                    totalAmountSum,
-                                                )}
-                                                %)
-                                            </span>
-                                        </td>
-                                        <td colSpan={3} />
-                                    </tr>
-                                </tfoot>
-                            )}
-                        </table>
-                    </div>
-                </div>
-
-                {total > 0 && (
-                    <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
-                        <span className="text-xs text-muted-foreground">
-                            Page {page} of {totalPages}
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page <= 1}
-                                onClick={() => setPage(page - 1)}
-                            >
-                                <ChevronLeft className="mr-1 size-3.5" />{' '}
-                                Previous
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={page >= totalPages}
-                                onClick={() => setPage(page + 1)}
-                            >
-                                Next <ChevronRight className="ml-1 size-3.5" />
-                            </Button>
+                                                            {inv.invoice_number}
+                                                        </Link>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs font-medium">
+                                                        {inv.party_name || '—'}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                                                        {fmtDate(inv.date)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                                                        {fmtDate(inv.due_date)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">
+                                                        Tk{' '}
+                                                        {fmt$(
+                                                            inv.due_amount ?? 0,
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-xs font-semibold tabular-nums">
+                                                        Tk{' '}
+                                                        {fmt$(inv.total_amount)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-xs text-green-600 tabular-nums">
+                                                        Tk{' '}
+                                                        {fmt$(inv.amount_paid)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right text-xs text-red-600 tabular-nums">
+                                                        Tk{' '}
+                                                        {fmt$(
+                                                            inv.vat_reduce ?? 0,
+                                                        )}
+                                                        <span className="block text-[10px] font-normal text-muted-foreground">
+                                                            (
+                                                            {reducePct(
+                                                                inv.vat_reduce ??
+                                                                    0,
+                                                                inv.total_amount,
+                                                            )}
+                                                            %)
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {inv.attachments &&
+                                                        inv.attachments.length >
+                                                            0 ? (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 w-7 px-0"
+                                                                title="Open attachment"
+                                                                onClick={() =>
+                                                                    window.open(
+                                                                        inv
+                                                                            .attachments![
+                                                                            inv
+                                                                                .attachments!
+                                                                                .length -
+                                                                                1
+                                                                        ],
+                                                                        '_blank',
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Paperclip className="size-3.5" />
+                                                            </Button>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                —
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span
+                                                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${statusColors[inv.status] || 'bg-slate-100 text-slate-600'}`}
+                                                        >
+                                                            {statusLabel[
+                                                                inv.status
+                                                            ] || inv.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            {inv.status !==
+                                                                'paid' && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-7 text-xs text-green-600 hover:text-green-700"
+                                                                    onClick={() =>
+                                                                        openPayDialog(
+                                                                            inv,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <CreditCard className="mr-1 size-3" />
+                                                                    Pay
+                                                                </Button>
+                                                            )}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 text-xs text-blue-600 hover:text-blue-700"
+                                                                onClick={() =>
+                                                                    printPayment(
+                                                                        inv,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Printer className="mr-1 size-3" />
+                                                                Print
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 text-xs text-purple-600 hover:text-purple-700"
+                                                                onClick={() =>
+                                                                    sharePayment(
+                                                                        inv,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Share2 className="mr-1 size-3" />
+                                                                Share
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-7 text-xs text-red-600 hover:text-red-700"
+                                                                onClick={() =>
+                                                                    openDelete([
+                                                                        inv.id,
+                                                                    ])
+                                                                }
+                                                            >
+                                                                <Trash2 className="mr-1 size-3" />
+                                                                Delete
+                                                            </Button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                    {invoices.length > 0 && (
+                                        <tfoot>
+                                            <tr className="border-t-2 border-sidebar-border/70 bg-muted/30 dark:border-sidebar-border">
+                                                <td
+                                                    colSpan={5}
+                                                    className="px-4 py-3 text-right text-xs font-semibold tracking-wide text-muted-foreground uppercase"
+                                                >
+                                                    Total
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">
+                                                    Tk {fmt$(totalDueAmountSum)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs font-bold tabular-nums">
+                                                    Tk {fmt$(totalAmountSum)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs font-bold text-green-600 tabular-nums">
+                                                    Tk {fmt$(totalPaidSum)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">
+                                                    Tk {fmt$(totalVatReduceSum)}
+                                                    <span className="block text-[10px] font-normal text-muted-foreground">
+                                                        (
+                                                        {reducePct(
+                                                            totalVatReduceSum,
+                                                            totalAmountSum,
+                                                        )}
+                                                        %)
+                                                    </span>
+                                                </td>
+                                                <td colSpan={3} />
+                                            </tr>
+                                        </tfoot>
+                                    )}
+                                </table>
+                            </div>
                         </div>
-                    </div>
+
+                        {total > 0 && (
+                            <div className="flex items-center justify-between gap-2 border-t border-sidebar-border/70 pt-4 dark:border-sidebar-border">
+                                <span className="text-xs text-muted-foreground">
+                                    Page {page} of {totalPages}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={page <= 1}
+                                        onClick={() => setPage(page - 1)}
+                                    >
+                                        <ChevronLeft className="mr-1 size-3.5" />{' '}
+                                        Previous
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={page >= totalPages}
+                                        onClick={() => setPage(page + 1)}
+                                    >
+                                        Next{' '}
+                                        <ChevronRight className="ml-1 size-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

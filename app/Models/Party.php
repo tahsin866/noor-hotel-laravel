@@ -22,5 +22,16 @@ class Party extends Model
         'start_date',
         'end_date',
         'notes',
+        'requirements',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'requirements' => 'array',
+        ];
+    }
 }

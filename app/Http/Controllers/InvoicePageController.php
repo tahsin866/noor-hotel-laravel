@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Challan;
+use App\Models\Invoice;
 use App\Models\Party;
 use App\Models\Product;
 use Illuminate\Http\Request;
@@ -13,7 +14,7 @@ class InvoicePageController extends Controller
 {
     public function __invoke(Request $request): Response
     {
-        $parties = Party::select('id', 'party_name')->get();
+        $parties = Party::select('id', 'party_name', 'requirements')->get();
         $products = Product::with(['party'])
             ->select('id', 'name', 'code', 'unit', 'party_id', 'customer_po_number')
             ->get();
@@ -48,10 +49,15 @@ class InvoicePageController extends Controller
                 ];
             });
 
+        $focusInvoice = $request->filled('invoice')
+            ? Invoice::query()->select('id', 'invoice_number')->find($request->integer('invoice'))
+            : null;
+
         return Inertia::render('noor-hotel/invoice', [
             'parties' => $parties,
             'products' => $products,
             'challans' => $challans,
+            'focusInvoice' => $focusInvoice,
         ]);
     }
 }

@@ -43,6 +43,7 @@ class ProductResource extends JsonResource
                 : null,
             'challans_count' => $this->challans_count,
             'invoiced_challans_count' => $this->invoiced_challans_count,
+            'invoices' => $this->invoiceLinks(),
             'meals' => ProductMealResource::collection($this->whenLoaded('meals')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

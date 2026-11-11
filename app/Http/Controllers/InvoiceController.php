@@ -28,8 +28,9 @@ class InvoiceController extends Controller
         $dateTo = $request->get('date_to');
         $search = $request->get('search');
 
-        $query = Invoice::with(['party', 'items.product', 'paymentHistory', 'challans'])
-            ->orderByDesc('created_at');
+        $query = Invoice::with(['party', 'items.product', 'paymentHistory', 'challans.product:id,code'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
 
         if ($status && $status !== 'all') {
             $query->where('status', $status);
@@ -51,7 +52,8 @@ class InvoiceController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('invoice_number', 'like', "%{$search}%")
                     ->orWhereHas('items.product', function ($pq) use ($search) {
-                        $pq->where('customer_po_number', 'like', "%{$search}%");
+                        $pq->where('customer_po_number', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%");
                     })
                     ->orWhereHas('party', function ($pq) use ($search) {
                         $pq->where('party_name', 'like', "%{$search}%");
@@ -72,6 +74,14 @@ class InvoiceController extends Controller
                 'party_id' => $item->party_id,
                 'party_name' => $item->party->party_name ?? '-',
                 'customer_po_number' => $item->items->first()?->product?->customer_po_number,
+                'system_pos' => $item->challans
+                    ->pluck('product')
+                    ->filter()
+                    ->unique('id')
+                    ->sortBy('id')
+                    ->map(fn ($product) => ['id' => $product->id, 'code' => $product->code])
+                    ->values()
+                    ->all(),
                 'date' => $item->date,
                 'due_date' => $item->due_date,
                 'total_amount' => $item->total_amount,
@@ -81,7 +91,7 @@ class InvoiceController extends Controller
                 'due_amount' => $dueAmount,
                 'attachments' => $item->paymentHistory
                     ->filter(fn ($p) => ! empty($p->attachment))
-                    ->map(fn ($p) => Storage::disk('public')->url($p->attachment))
+                    ->map(fn ($p) => $p->attachment_url)
                     ->values()
                     ->all(),
                 'challan_ids' => $item->challans->pluck('id')->all(),
@@ -145,6 +155,7 @@ class InvoiceController extends Controller
             $validated['due_date'],
             $validated['notes'] ?? null,
             $validated['show_print_date'] ?? true,
+            $validated['show_terms'] ?? false,
         );
 
         NotifyAdmins::recordCreated('invoice', [
@@ -171,6 +182,7 @@ class InvoiceController extends Controller
             'due_date' => $validated['due_date'],
             'notes' => $validated['notes'] ?? null,
             'show_print_date' => $validated['show_print_date'] ?? true,
+            'show_terms' => $validated['show_terms'] ?? false,
         ]);
 
         $invoice = $invoiceService->updateFromChallans($invoice, $validated['challan_ids']);
@@ -415,6 +427,7 @@ class InvoiceController extends Controller
                 'payments' => $invoice->paymentHistory->map(function ($p) {
                     return [
                         'id' => $p->id,
+                        'payment_number' => $p->payment_number,
                         'amount' => $p->amount,
                         'payment_date' => $p->payment_date,
                         'payment_method' => $p->payment_method,
@@ -423,7 +436,7 @@ class InvoiceController extends Controller
                         'payment_status' => $p->payment_status,
                         'customer_bank_name' => $p->customer_bank_name,
                         'user_bank_name' => $p->user_bank_name,
-                        'attachment' => $p->attachment ? Storage::disk('public')->url($p->attachment) : null,
+                        'attachment' => $p->attachment_url,
                         'reduce_amount' => $p->reduce_amount,
                         'reduce_note' => $p->reduce_note,
                     ];

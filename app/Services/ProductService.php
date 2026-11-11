@@ -28,9 +28,9 @@ class ProductService
 
         $product = $this->products->create($data);
 
-        foreach ($dto->meals as $meal) {
+        foreach (array_values($dto->meals) as $position => $meal) {
             if (($meal['quantity'] ?? 0) > 0 || ($meal['unit_price'] ?? 0) > 0) {
-                $product->meals()->create($meal);
+                $product->meals()->create([...$meal, 'sort_order' => $position + 1]);
             }
         }
 
@@ -54,10 +54,12 @@ class ProductService
         $existingMeals = $product->meals()->get()->keyBy('id');
         $mealsToKeep = [];
 
-        foreach ($meals as $meal) {
+        foreach (array_values($meals) as $position => $meal) {
             if (($meal['quantity'] ?? 0) <= 0 && ($meal['unit_price'] ?? 0) <= 0) {
                 continue;
             }
+
+            $meal['sort_order'] = $position + 1;
 
             $mealId = $meal['id'] ?? null;
 

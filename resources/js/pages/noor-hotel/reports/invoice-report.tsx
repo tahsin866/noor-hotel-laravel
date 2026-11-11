@@ -166,8 +166,8 @@ export default function InvoiceReport({ parties }: { parties: Party[] }) {
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState<Set<number>>(new Set());
     const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(10);
-    const [pagination, setPagination] = useState<Pagination>({ current_page: 1, per_page: 10, total: 0, last_page: 1 });
+    const [perPage, setPerPage] = useState(25);
+    const [pagination, setPagination] = useState<Pagination>({ current_page: 1, per_page: 25, total: 0, last_page: 1 });
 
     const toggleExpand = (id: number) => {
         setExpanded((prev) => {
@@ -203,7 +203,7 @@ export default function InvoiceReport({ parties }: { parties: Party[] }) {
             if (data.success) {
                 setRows(data.data.rows || []);
                 setSummary(data.data.summary || null);
-                setPagination(data.data.pagination || { current_page: 1, per_page: 10, total: 0, last_page: 1 });
+                setPagination(data.data.pagination || { current_page: 1, per_page: 25, total: 0, last_page: 1 });
             } else {
                 toast.error(data.message || 'Failed to load report');
             }
@@ -302,7 +302,7 @@ export default function InvoiceReport({ parties }: { parties: Party[] }) {
             if (search.trim()) params.set('search', search.trim());
             if (dateFrom) params.set('date_from', dateFrom);
             if (dateTo) params.set('date_to', dateTo);
-            params.set('per_page', '1000');
+            params.set('all', '1');
             const res = await fetch(`/api/reports/invoice?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -408,7 +408,7 @@ export default function InvoiceReport({ parties }: { parties: Party[] }) {
             if (search.trim()) params.set('search', search.trim());
             if (dateFrom) params.set('date_from', dateFrom);
             if (dateTo) params.set('date_to', dateTo);
-            params.set('per_page', '1000');
+            params.set('all', '1');
             const res = await fetch(`/api/reports/invoice?${params.toString()}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
             });
@@ -837,7 +837,7 @@ export default function InvoiceReport({ parties }: { parties: Party[] }) {
                                 }}
                                 className="h-7 rounded-md border border-input bg-transparent px-1.5 text-xs outline-none"
                             >
-                                {[10, 20, 30, 50, 100].map((n) => (
+                                {[10, 25, 50, 100, 250, 500].map((n) => (
                                     <option key={n} value={n}>
                                         {n} / page
                                     </option>

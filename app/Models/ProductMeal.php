@@ -16,6 +16,7 @@ class ProductMeal extends Model
 
     protected $fillable = [
         'product_id',
+        'sort_order',
         'meal_type',
         'quantity',
         'unit_price',

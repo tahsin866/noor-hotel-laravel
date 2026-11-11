@@ -16,5 +16,7 @@ final readonly class UpdatePartyDTO
         public ?string $startDate,
         public ?string $endDate,
         public ?string $notes,
+        /** @var list<string|null>|null */
+        public ?array $requirements = null,
     ) {}
 }

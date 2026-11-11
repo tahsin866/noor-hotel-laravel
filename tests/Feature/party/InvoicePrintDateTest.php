@@ -118,3 +118,44 @@ test('invoice show returns show_print_date', function () {
     $response->assertSuccessful();
     expect($response->json('data.show_print_date'))->toBeFalse();
 });
+
+test('creating an invoice defaults show_terms to false', function () {
+    actingAsInvoiceUser($this);
+    $party = Party::factory()->create();
+    $challan = createInvoicePrintChallan($party);
+
+    $this->post('/api/invoices', [
+        'party_id' => $party->id,
+        'date' => '2026-01-10',
+        'due_date' => '2026-02-10',
+        'challan_ids' => [$challan->id],
+    ])->assertSuccessful()->assertJsonPath('data.show_terms', false);
+
+    expect(Invoice::query()->first()->show_terms)->toBeFalse();
+});
+
+test('show_terms can be enabled on create and toggled on update', function () {
+    actingAsInvoiceUser($this);
+    $party = Party::factory()->create();
+    $challan = createInvoicePrintChallan($party);
+
+    $this->post('/api/invoices', [
+        'party_id' => $party->id,
+        'date' => '2026-01-10',
+        'due_date' => '2026-02-10',
+        'show_terms' => true,
+        'challan_ids' => [$challan->id],
+    ])->assertSuccessful()->assertJsonPath('data.show_terms', true);
+
+    $invoice = Invoice::query()->first();
+
+    $this->put("/api/invoices/{$invoice->id}", [
+        'party_id' => $party->id,
+        'date' => '2026-01-10',
+        'due_date' => '2026-02-10',
+        'show_terms' => false,
+        'challan_ids' => [$challan->id],
+    ])->assertSuccessful();
+
+    expect($invoice->fresh()->show_terms)->toBeFalse();
+});

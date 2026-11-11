@@ -26,6 +26,7 @@ class PartyService
             'start_date' => $dto->startDate,
             'end_date' => $dto->endDate,
             'notes' => $dto->notes,
+            'requirements' => $this->normalizeRequirements($dto->requirements),
         ];
 
         return $this->parties->create(array_filter($data, fn ($value) => $value !== null));
@@ -45,6 +46,7 @@ class PartyService
             'start_date' => $dto->startDate,
             'end_date' => $dto->endDate,
             'notes' => $dto->notes,
+            'requirements' => $this->normalizeRequirements($dto->requirements),
         ], fn ($value) => $value !== null);
 
         return $this->parties->update($party, $data);
@@ -55,8 +57,29 @@ class PartyService
         $this->parties->delete($party);
     }
 
-    public function search(string $query, array $filters = []): \Illuminate\Pagination\LengthAwarePaginator
+    /**
+     * @param  array<string, string>  $filters
+     */
+    public function search(string $query, array $filters = [], int $perPage = 10): \Illuminate\Pagination\LengthAwarePaginator
     {
-        return $this->parties->search($query, $filters);
+        return $this->parties->search($query, $filters, $perPage);
+    }
+
+    /**
+     * Trim submitted bill-submission requirements and drop blank rows.
+     *
+     * @param  list<string|null>|null  $requirements
+     * @return list<string>|null
+     */
+    private function normalizeRequirements(?array $requirements): ?array
+    {
+        if ($requirements === null) {
+            return null;
+        }
+
+        return array_values(array_filter(
+            array_map(fn ($item) => trim((string) $item), $requirements),
+            fn (string $item) => $item !== '',
+        ));
     }
 }

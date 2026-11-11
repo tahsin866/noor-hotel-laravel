@@ -25,6 +25,7 @@ class InvoiceResource extends JsonResource
             'status' => $this->status,
             'print_status' => $this->print_status,
             'show_print_date' => $this->show_print_date,
+            'show_terms' => (bool) $this->show_terms,
             'notes' => $this->notes,
             'customer_po_number' => $this->items->first()?->product->customer_po_number,
             'items' => InvoiceItemResource::collection($this->whenLoaded('items')),

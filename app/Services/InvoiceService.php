@@ -18,7 +18,7 @@ class InvoiceService
         private ChallanService $challanService,
     ) {}
 
-    public function createFromChallans(array $challanIds, int $partyId, int $userId, string $date, string $dueDate, ?string $notes, bool $showPrintDate = true): Invoice
+    public function createFromChallans(array $challanIds, int $partyId, int $userId, string $date, string $dueDate, ?string $notes, bool $showPrintDate = true, bool $showTerms = false): Invoice
     {
         $challans = Challan::with(['product', 'product.party', 'items.productMeal.product'])
             ->whereIn('id', $challanIds)
@@ -43,6 +43,7 @@ class InvoiceService
             'amount_paid' => 0,
             'amount_due' => round($totalAmount, 2),
             'show_print_date' => $showPrintDate,
+            'show_terms' => $showTerms,
             'notes' => $notes,
             'status' => 'pending',
         ]);
@@ -216,6 +217,7 @@ class InvoiceService
                 }
 
                 $grouped[$key] = [
+                    'po_sort_key' => [$productId, (int) ($ci->productMeal->sort_order ?? 0), (int) ($ci->product_meal_id ?? 0)],
                     'product_id' => $productId,
                     'description' => $description,
                     'meal_type' => $mealType,
@@ -226,8 +228,14 @@ class InvoiceService
             }
         }
 
+        uasort($grouped, fn (array $a, array $b): int => $a['po_sort_key'] <=> $b['po_sort_key']);
+
         $items = [];
+        $position = 0;
         foreach ($grouped as $g) {
+            unset($g['po_sort_key']);
+            $g['sort_order'] = ++$position;
+
             $lineSubtotal = $g['quantity'] * $g['unit_price'];
             $vatAmount = round($lineSubtotal * $g['vat_rate'] / 100, 2);
 

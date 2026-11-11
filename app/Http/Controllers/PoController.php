@@ -14,8 +14,13 @@ class PoController extends Controller
     {
         $parties = Party::select('id', 'party_name')->get();
 
+        $focusPo = $request->filled('po')
+            ? Product::query()->select('id', 'code')->find($request->integer('po'))
+            : null;
+
         return Inertia::render('noor-hotel/po', [
             'parties' => $parties,
+            'focusPo' => $focusPo,
         ]);
     }
 }

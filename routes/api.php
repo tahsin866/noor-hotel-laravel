@@ -3,6 +3,7 @@
 use App\Http\Controllers\ChallanController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\PartyController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\reports\ChallanReportController;
 use App\Http\Controllers\reports\InvoiceReportController;
@@ -41,6 +42,7 @@ Route::get('invoices/{id}/print', [InvoiceController::class, 'print']);
 Route::post('invoices/{id}/mark-printed', [InvoiceController::class, 'markPrinted']);
 Route::patch('invoices/{id}/status', [InvoiceController::class, 'updateStatus']);
 Route::get('invoices/{id}/payment-history', [InvoiceController::class, 'paymentHistory']);
+Route::get('payments', [PaymentController::class, 'index']);
 Route::get('payments/report', [InvoiceController::class, 'report']);
 Route::post('payments/bulk', [InvoiceController::class, 'bulkPayment']);
 

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StorePartyRequest;
 use App\Http\Requests\Api\UpdatePartyRequest;
 use App\Http\Resources\PartyResource;
+use App\Models\Party;
 use App\Services\PartyService;
 use App\Support\NotifyAdmins;
 use App\ValueObjects\Money;
@@ -22,19 +23,28 @@ class PartyController extends Controller
     public function index(Request $request): Response
     {
         $query = (string) ($request->search ?? '');
-        $filters = [
-            'party_type' => $request->party_type,
-            'agreement_type' => $request->agreement_type,
-            'end_date' => $request->end_date_from ? ['>=', $request->end_date_from] : null,
-        ];
+        $filters = array_filter([
+            'party_type' => $request->string('party_type')->toString(),
+            'agreement_type' => $request->string('agreement_type')->toString(),
+            'end_date_from' => $request->string('end_date_from')->toString(),
+            'end_date_to' => $request->string('end_date_to')->toString(),
+        ]);
 
         $perPage = $request->integer('per_page', 10);
-        $perPage = in_array($perPage, [10, 20, 50, 100]) ? $perPage : 10;
+        $perPage = in_array($perPage, [10, 20, 50, 100], true) ? $perPage : 10;
 
-        $parties = $this->parties->search($query, array_filter($filters));
+        $parties = $this->parties->search($query, $filters, $perPage);
 
         return Inertia::render('noor-hotel/party', [
             'parties' => $parties,
+            'filters' => [
+                'search' => $query,
+                'party_type' => $filters['party_type'] ?? '',
+                'agreement_type' => $filters['agreement_type'] ?? '',
+                'end_date_from' => $filters['end_date_from'] ?? '',
+                'end_date_to' => $filters['end_date_to'] ?? '',
+                'per_page' => $perPage,
+            ],
         ]);
     }
 
@@ -52,6 +62,7 @@ class PartyController extends Controller
             startDate: $request->validated('start_date'),
             endDate: $request->validated('end_date'),
             notes: $request->validated('notes'),
+            requirements: $request->validated('requirements'),
         );
 
         $party = $partyService->create($dto);
@@ -80,6 +91,7 @@ class PartyController extends Controller
             startDate: $request->validated('start_date'),
             endDate: $request->validated('end_date'),
             notes: $request->validated('notes'),
+            requirements: $request->validated('requirements'),
         );
 
         $party = $partyService->update($party, $dto);

@@ -1,4 +1,26 @@
 import { Head, router } from '@inertiajs/react';
+import {
+    CalendarDays,
+    ChevronLeft,
+    ClipboardList,
+    ChevronRight,
+    FileDown,
+    Filter,
+    Mail,
+    MapPin,
+    MoreHorizontal,
+    Pencil,
+    Phone,
+    Plus,
+    Printer,
+    Search,
+    Trash2,
+    Users,
+    X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -31,27 +53,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import {
-    CalendarDays,
-    ChevronLeft,
-    ChevronRight,
-    FileDown,
-    Filter,
-    Mail,
-    MapPin,
-    MoreHorizontal,
-    Pencil,
-    Phone,
-    Plus,
-    Printer,
-    Search,
-    Trash2,
-    Users,
-    X,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { useEffect, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 
 type Party = {
     id: number;
@@ -66,6 +67,7 @@ type Party = {
     start_date: string;
     end_date: string;
     notes: string;
+    requirements: string[];
 };
 
 type PaginatedData<T> = {
@@ -100,6 +102,7 @@ const emptyParty: Party = {
     start_date: '',
     end_date: '',
     notes: '',
+    requirements: [],
 };
 
 const emptyFilters: Filters = {
@@ -111,7 +114,121 @@ const emptyFilters: Filters = {
     per_page: 10,
 };
 
-export default function Party({ parties }: { parties: PaginatedData<Party> }) {
+/**
+ * Build the JSON payload from a party form, keeping the repeated
+ * `requirements[]` inputs as an array instead of collapsing them.
+ */
+function buildPartyPayload(formData: FormData): Record<string, unknown> {
+    const payload: Record<string, unknown> = {};
+
+    formData.forEach((value, key) => {
+        if (key !== 'requirements[]') {
+            payload[key] = value;
+        }
+    });
+
+    payload.requirements = formData
+        .getAll('requirements[]')
+        .map((value) => String(value).trim())
+        .filter((value) => value !== '');
+
+    return payload;
+}
+
+function RequirementsEditor({
+    initialRequirements,
+    errors,
+}: {
+    initialRequirements: string[];
+    errors: Record<string, string>;
+}) {
+    const [rows, setRows] = useState<string[]>(initialRequirements);
+
+    const addRow = () => setRows((prev) => [...prev, '']);
+
+    const updateRow = (index: number, value: string) =>
+        setRows((prev) => prev.map((row, i) => (i === index ? value : row)));
+
+    const removeRow = (index: number) =>
+        setRows((prev) => prev.filter((_, i) => i !== index));
+
+    return (
+        <div className="grid gap-2 rounded-lg border border-dashed border-border p-3">
+            <div className="flex items-center justify-between">
+                <div>
+                    <Label className="flex items-center gap-1.5">
+                        <ClipboardList className="size-4" />
+                        Bill Submission Requirements
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                        Documents this party needs with every bill (e.g. 5% VAT
+                        copy, Trade License).
+                    </p>
+                </div>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addRow}
+                >
+                    <Plus className="size-4" />
+                    Add Requirement
+                </Button>
+            </div>
+
+            {rows.length === 0 ? (
+                <p className="py-2 text-center text-xs text-muted-foreground">
+                    No requirements added.
+                </p>
+            ) : (
+                <div className="grid gap-2">
+                    {rows.map((row, index) => (
+                        <div key={index} className="grid gap-1">
+                            <div className="flex items-center gap-2">
+                                <span className="w-6 shrink-0 text-right text-xs text-muted-foreground">
+                                    {index + 1}.
+                                </span>
+                                <Input
+                                    name="requirements[]"
+                                    value={row}
+                                    placeholder="e.g. 5% VAT copy"
+                                    onChange={(e) =>
+                                        updateRow(index, e.target.value)
+                                    }
+                                    autoFocus={
+                                        row === '' && index === rows.length - 1
+                                    }
+                                />
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
+                                    onClick={() => removeRow(index)}
+                                    aria-label="Remove requirement"
+                                >
+                                    <Trash2 className="size-4" />
+                                </Button>
+                            </div>
+                            <InputError
+                                message={errors[`requirements.${index}`]}
+                            />
+                        </div>
+                    ))}
+                </div>
+            )}
+            <InputError message={errors.requirements} />
+        </div>
+    );
+}
+
+export default function Party({
+    parties,
+    filters: initialFilters,
+}: {
+    parties: PaginatedData<Party>;
+    filters?: Partial<Filters>;
+}) {
     const [addOpen, setAddOpen] = useState(false);
     const [editOpen, setEditOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -120,7 +237,13 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
     const [processing, setProcessing] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const [filters, setFilters] = useState<Filters>(emptyFilters);
+    const [addFormKey, setAddFormKey] = useState(0);
+
+    const [filters, setFilters] = useState<Filters>({
+        ...emptyFilters,
+        ...initialFilters,
+        per_page: Number(initialFilters?.per_page ?? emptyFilters.per_page),
+    });
     const searchRef = useRef<HTMLInputElement>(null);
     const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
         undefined,
@@ -130,13 +253,29 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
         const params: Record<string, string | number> = {};
         const merged = { ...filters, ...overrides };
 
-        if (merged.search) params.search = merged.search;
-        if (merged.party_type) params.party_type = merged.party_type;
-        if (merged.agreement_type)
+        if (merged.search) {
+            params.search = merged.search;
+        }
+
+        if (merged.party_type) {
+            params.party_type = merged.party_type;
+        }
+
+        if (merged.agreement_type) {
             params.agreement_type = merged.agreement_type;
-        if (merged.end_date_from) params.end_date_from = merged.end_date_from;
-        if (merged.end_date_to) params.end_date_to = merged.end_date_to;
-        if (merged.per_page !== 10) params.per_page = merged.per_page;
+        }
+
+        if (merged.end_date_from) {
+            params.end_date_from = merged.end_date_from;
+        }
+
+        if (merged.end_date_to) {
+            params.end_date_to = merged.end_date_to;
+        }
+
+        if (merged.per_page !== 10) {
+            params.per_page = merged.per_page;
+        }
 
         router.get('/party', params, {
             preserveState: true,
@@ -146,13 +285,30 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
 
     const goToPage = (page: number) => {
         const params: Record<string, string | number> = { page };
-        if (filters.search) params.search = filters.search;
-        if (filters.party_type) params.party_type = filters.party_type;
-        if (filters.agreement_type)
+
+        if (filters.search) {
+            params.search = filters.search;
+        }
+
+        if (filters.party_type) {
+            params.party_type = filters.party_type;
+        }
+
+        if (filters.agreement_type) {
             params.agreement_type = filters.agreement_type;
-        if (filters.end_date_from) params.end_date_from = filters.end_date_from;
-        if (filters.end_date_to) params.end_date_to = filters.end_date_to;
-        if (filters.per_page !== 10) params.per_page = filters.per_page;
+        }
+
+        if (filters.end_date_from) {
+            params.end_date_from = filters.end_date_from;
+        }
+
+        if (filters.end_date_to) {
+            params.end_date_to = filters.end_date_to;
+        }
+
+        if (filters.per_page !== 10) {
+            params.per_page = filters.per_page;
+        }
 
         router.get('/party', params, {
             preserveState: true,
@@ -198,7 +354,7 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
-                body: JSON.stringify(Object.fromEntries(formData)),
+                body: JSON.stringify(buildPartyPayload(formData)),
             });
 
             const data = await response.json();
@@ -207,6 +363,7 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                 toast.success(data.message);
                 setAddOpen(false);
                 form.reset();
+                setAddFormKey((key) => key + 1);
                 router.reload({ only: ['parties'] });
             } else if (response.status === 422) {
                 setErrors(data.errors || {});
@@ -234,7 +391,7 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
-                body: JSON.stringify(Object.fromEntries(formData)),
+                body: JSON.stringify(buildPartyPayload(formData)),
             });
 
             const data = await response.json();
@@ -299,7 +456,7 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
         window.open(`/api/party/${party.id}/print`, '_blank');
     };
 
-    const PartyFormFields = ({
+    const renderPartyFormFields = ({
         prefix,
         party,
     }: {
@@ -472,6 +629,7 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
             'Start Date': p.start_date,
             'End Date': p.end_date,
             Notes: p.notes,
+            Requirements: (p.requirements ?? []).join('; '),
         }));
 
         const ws = XLSX.utils.json_to_sheet(data);
@@ -515,7 +673,12 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                                     onSubmit={handleAdd}
                                     className="space-y-4"
                                 >
-                                    <PartyFormFields prefix="add-" />
+                                    {renderPartyFormFields({ prefix: 'add-' })}
+                                    <RequirementsEditor
+                                        key={addFormKey}
+                                        initialRequirements={[]}
+                                        errors={errors}
+                                    />
                                     <DialogFooter>
                                         <Button
                                             type="button"
@@ -849,6 +1012,9 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                                     <th className="px-5 py-3 text-left text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                                         End Date
                                     </th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                                        Requirements
+                                    </th>
                                     <th className="px-5 py-3 text-right text-xs font-semibold tracking-wider text-muted-foreground uppercase">
                                         Actions
                                     </th>
@@ -858,7 +1024,7 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                                 {parties.data.length === 0 ? (
                                     <tr>
                                         <td
-                                            colSpan={7}
+                                            colSpan={8}
                                             className="px-5 py-16 text-center"
                                         >
                                             <div className="flex flex-col items-center gap-2">
@@ -974,6 +1140,53 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                                                         <span>—</span>
                                                     )}
                                                 </td>
+                                                <td className="px-5 py-4">
+                                                    {party.requirements
+                                                        ?.length ? (
+                                                        <div
+                                                            className="flex max-w-56 flex-wrap gap-1"
+                                                            title={party.requirements.join(
+                                                                '\n',
+                                                            )}
+                                                        >
+                                                            {party.requirements
+                                                                .slice(0, 2)
+                                                                .map(
+                                                                    (
+                                                                        requirement,
+                                                                        i,
+                                                                    ) => (
+                                                                        <Badge
+                                                                            key={
+                                                                                i
+                                                                            }
+                                                                            variant="outline"
+                                                                            className="max-w-full truncate"
+                                                                        >
+                                                                            {
+                                                                                requirement
+                                                                            }
+                                                                        </Badge>
+                                                                    ),
+                                                                )}
+                                                            {party.requirements
+                                                                .length > 2 && (
+                                                                <Badge variant="secondary">
+                                                                    +
+                                                                    {party
+                                                                        .requirements
+                                                                        .length -
+                                                                        2}{' '}
+                                                                    more
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">
+                                                            —
+                                                        </span>
+                                                    )}
+                                                </td>
                                                 <td className="px-5 py-4 text-right">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger
@@ -1057,28 +1270,7 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                                             ...prev,
                                             per_page: perPage,
                                         }));
-                                        const params: Record<
-                                            string,
-                                            string | number
-                                        > = { per_page: perPage };
-                                        if (filters.search)
-                                            params.search = filters.search;
-                                        if (filters.party_type)
-                                            params.party_type =
-                                                filters.party_type;
-                                        if (filters.agreement_type)
-                                            params.agreement_type =
-                                                filters.agreement_type;
-                                        if (filters.end_date_from)
-                                            params.end_date_from =
-                                                filters.end_date_from;
-                                        if (filters.end_date_to)
-                                            params.end_date_to =
-                                                filters.end_date_to;
-                                        router.get('/party', params, {
-                                            preserveState: true,
-                                            preserveScroll: true,
-                                        });
+                                        applyFilters({ per_page: perPage });
                                     }}
                                     className="flex h-8 w-20 rounded-md border border-input bg-transparent px-2 text-xs shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                                 >
@@ -1109,11 +1301,19 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                                 .filter((page) => {
                                     const cur = parties.current_page;
                                     const last = parties.last_page;
-                                    if (last <= 7) return true;
-                                    if (page === 1 || page === last)
+
+                                    if (last <= 7) {
                                         return true;
-                                    if (page >= cur - 1 && page <= cur + 1)
+                                    }
+
+                                    if (page === 1 || page === last) {
                                         return true;
+                                    }
+
+                                    if (page >= cur - 1 && page <= cur + 1) {
+                                        return true;
+                                    }
+
                                     return false;
                                 })
                                 .map((page, idx, arr) => (
@@ -1174,7 +1374,17 @@ export default function Party({ parties }: { parties: PaginatedData<Party> }) {
                             name="id"
                             value={editingParty.id}
                         />
-                        <PartyFormFields prefix="edit-" party={editingParty} />
+                        {renderPartyFormFields({
+                            prefix: 'edit-',
+                            party: editingParty,
+                        })}
+                        <RequirementsEditor
+                            key={editingParty.id}
+                            initialRequirements={
+                                editingParty.requirements ?? []
+                            }
+                            errors={errors}
+                        />
                         <DialogFooter>
                             <Button
                                 type="button"

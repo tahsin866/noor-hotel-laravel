@@ -25,6 +25,7 @@ class Invoice extends Model
         'status',
         'print_status',
         'show_print_date',
+        'show_terms',
         'notes',
     ];
 
@@ -37,6 +38,7 @@ class Invoice extends Model
         'amount_paid' => 'decimal:2',
         'amount_due' => 'decimal:2',
         'show_print_date' => 'boolean',
+        'show_terms' => 'boolean',
     ];
 
     public function party()
@@ -51,7 +53,7 @@ class Invoice extends Model
 
     public function items()
     {
-        return $this->hasMany(InvoiceItem::class);
+        return $this->hasMany(InvoiceItem::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function challans()

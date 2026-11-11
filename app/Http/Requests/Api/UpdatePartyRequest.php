@@ -25,6 +25,8 @@ class UpdatePartyRequest extends FormRequest
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'notes' => 'nullable|string',
+            'requirements' => 'nullable|array|max:50',
+            'requirements.*' => 'nullable|string|max:255',
         ];
     }
 }

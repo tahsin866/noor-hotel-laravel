@@ -64,6 +64,10 @@ class RebuildInvoiceItems extends Command
                 $this->line('  '.$diff);
             }
 
+            if (! $this->followsPurchaseOrderSequence($invoice, $rebuilt)) {
+                $this->line('  item order: reordered to match the purchase order sequence');
+            }
+
             if ($apply) {
                 $this->invoiceService->rebuildFromChallans($invoice);
             }
@@ -145,6 +149,26 @@ class RebuildInvoiceItems extends Command
     /**
      * @param  array{items: array<int, array<string, mixed>>, subtotal: float, total_vat: float, total_amount: float}  $rebuilt
      */
+    /**
+     * Whether the invoice lines are already in the same order as the purchase order lines.
+     *
+     * @param  array{items: array<int, array<string, mixed>>}  $rebuilt
+     */
+    private function followsPurchaseOrderSequence(Invoice $invoice, array $rebuilt): bool
+    {
+        $currentOrder = $invoice->items
+            ->map(fn ($item): string => $this->key($item->description, $item->meal_type))
+            ->values()
+            ->all();
+
+        $purchaseOrderSequence = array_map(
+            fn (array $item): string => $this->key($item['description'], $item['meal_type']),
+            array_values($rebuilt['items']),
+        );
+
+        return $currentOrder === $purchaseOrderSequence;
+    }
+
     private function isUnchanged(Invoice $invoice, array $rebuilt): bool
     {
         if (count($invoice->items) !== count($rebuilt['items'])) {
@@ -152,6 +176,10 @@ class RebuildInvoiceItems extends Command
         }
 
         if (round((float) $invoice->total_amount, 2) !== round((float) $rebuilt['total_amount'], 2)) {
+            return false;
+        }
+
+        if (! $this->followsPurchaseOrderSequence($invoice, $rebuilt)) {
             return false;
         }
 
