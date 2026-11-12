@@ -2,144 +2,71 @@ import { amountInWords } from '@/components/invoices/amount-in-words';
 import type { Invoice, InvoiceItem } from '@/components/invoices/types';
 import { openPrintWindow } from '@/lib/print';
 
-export const INVOICE_TERMS_TEXT =
-    'Please note that the applicable Government VAT and Tax are included in the quoted price, and transportation costs are also included in the invoice value.';
+/** Terms & conditions printed as a numbered list when `show_terms` is on. */
+export const INVOICE_TERMS = [
+    'The applicable Government VAT and Tax are included in the quoted price.',
+    'Transportation costs are also included in the invoice value.',
+];
+
+export const INVOICE_TERMS_TEXT = INVOICE_TERMS.join(' ');
 
 /**
  * Print layout (A4):
  *
- * We do NOT rely on the browser's own page breaking (fixed footers and
- * repeated table headers behave differently between print dialogs). Instead
- * every printed page is a fixed-size `.sheet` (one A4 page) with:
- *   - the invoice header + column headings at the top,
- *   - the bank details / signature footer pinned to the bottom,
- *   - "Page x of y".
- * A small script in the print window measures the real row heights and moves
- * rows to a new sheet when the current one is full, so every page is laid out
- * the same way. The totals block is never split; if it does not fit after the
- * last row, it goes to the next sheet together with the footer.
+ * Page margins are left to the print dialog (Margins: Default / Custom), so a
+ * pre-printed letterhead can be skipped by giving it a larger top margin.
+ * The browser does the page breaking. Each invoice is one table:
+ *   - `thead` holds the invoice header + column headings, repeated on every page,
+ *   - the bank details / signature footer is `position: fixed` in print, so it
+ *     sits at the bottom of every page; an empty `tfoot` row of the same
+ *     height (repeated per page) keeps the rows from running under it,
+ *   - the totals sit in a last row that is never split across pages.
  */
 const PRINT_STYLES = `
-    @page { size: A4; margin: 0; }
+    @page { size: A4; }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; }
     body { font-family: Arial, Helvetica, sans-serif; color: #1e293b; font-size: 13px; background: #f1f5f9; }
-    .sheet { width: 210mm; height: 296mm; padding: 10mm 12mm 8mm; margin: 0 auto; background: #fff; display: flex; flex-direction: column; overflow: hidden; page-break-after: always; break-after: page; }
-    .sheet:last-child { page-break-after: auto; break-after: auto; }
-    .sheet-content { flex: 1 1 auto; min-height: 0; overflow: hidden; }
-    .sheet-footer { flex: none; padding-top: 6px; font-size: 12px; }
-    @media screen { .sheet { margin: 12px auto; box-shadow: 0 1px 4px rgba(0,0,0,.15); } }
-    @media print { body { background: #fff; } }
+    .invoice { background: #fff; break-after: page; page-break-after: always; }
+    .invoice:last-child { break-after: auto; page-break-after: auto; }
+    @media screen { .invoice { width: 210mm; margin: 12px auto; padding: 10mm 12mm; box-shadow: 0 1px 4px rgba(0,0,0,.15); } }
+    @media print { body { background: #fff; } .invoice { padding: 0 1px; } }
     .doc-title { text-align: center; padding-bottom: 12px; }
     .doc-title h1 { font-size: 26px; margin: 0; color: #0f172a; text-transform: uppercase; letter-spacing: 2px; }
     table.info { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 13px; }
     table.info td { border: none; padding: 4px 0; vertical-align: top; }
     table.items { width: 100%; table-layout: fixed; border-collapse: collapse; }
-    table.items th { padding: 6px 8px; border: 1px solid #000; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
-    table.items td { padding: 4px 6px; border: 1px solid #000; font-size: 11px; vertical-align: top; }
-    .continued { text-align: right; font-size: 10px; color: #64748b; padding-top: 4px; }
+    table.items > thead { display: table-header-group; }
+    table.items > tfoot { display: table-footer-group; }
+    table.items > * > tr { break-inside: avoid; page-break-inside: avoid; }
+    table.items > * > tr > th { padding: 6px 8px; border: 1px solid #000; text-align: left; font-size: 11px; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; }
+    table.items > * > tr > td { padding: 4px 6px; border: 1px solid #000; font-size: 11px; vertical-align: top; }
+    table.items > * > tr.frame > td { border: none; padding: 0; font-size: 13px; }
     .totals { padding-top: 12px; text-align: right; font-size: 14px; }
     .totals table { border: none; margin-left: auto; font-size: 14px; }
     .totals td { border: none; padding: 4px 0; text-align: right; white-space: nowrap; }
     .totals td.label { padding-right: 10px; }
     .totals .rule td { border-top: 2px solid #e2e8f0; }
     .note { text-align: left; margin-top: 8px; font-size: 12px; color: #475569; }
-    .note.terms { font-size: 11px; }
+    .terms { text-align: left; margin-top: 10px; font-size: 11px; color: #475569; }
+    .terms ol { margin: 4px 0 0; padding-left: 18px; }
+    .terms li { margin-bottom: 2px; line-height: 1.4; }
+    .footer-space { height: 0; }
+    .print-footer { display: none; }
+    @media print {
+        .screen-footer { display: none; }
+        .footer-space { height: 48mm; }
+        .print-footer { display: block; position: fixed; left: 1px; right: 1px; bottom: 0; background: #fff; }
+    }
+    .sheet-footer { padding-top: 16px; font-size: 12px; }
     .sheet-footer table { width: 100%; border: none; border-collapse: collapse; }
     .sheet-footer td { border: none; vertical-align: top; }
     .bank td { padding: 1px 8px 1px 0; white-space: nowrap; }
-    .generated { display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 8px; }`;
+    .generated { font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 6px; margin-top: 8px; }`;
 
-/**
- * Runs inside the print window: builds the `.sheet` pages from each
- * `<template class="invoice-src">` by measuring real heights.
- */
-const PAGINATE_SCRIPT = `
-(function () {
-    var footerHtml = document.getElementById('footer-src').innerHTML;
-    var output = document.getElementById('sheets');
-
-    document.querySelectorAll('template.invoice-src').forEach(function (src) {
-        var frag = src.content;
-        var headerHtml = frag.querySelector('.src-header').innerHTML;
-        var tableHead = frag.querySelector('table.src-table').cloneNode(true);
-        tableHead.querySelector('tbody').innerHTML = '';
-        var rows = Array.prototype.slice.call(frag.querySelectorAll('table.src-table tbody tr'));
-        var totalsHtml = frag.querySelector('.src-totals').innerHTML;
-        var sheets = [];
-        var current;
-
-        function newSheet() {
-            var sheet = document.createElement('section');
-            sheet.className = 'sheet';
-            sheet.innerHTML =
-                '<div class="sheet-content">' + headerHtml +
-                '<div class="table-slot"></div><div class="continued"></div><div class="tail"></div></div>' +
-                '<div class="sheet-footer">' + footerHtml + '</div>';
-            var table = tableHead.cloneNode(true);
-            table.className = 'items';
-            sheet.querySelector('.table-slot').appendChild(table);
-            output.appendChild(sheet);
-            sheets.push(sheet);
-            current = {
-                sheet: sheet,
-                content: sheet.querySelector('.sheet-content'),
-                table: table,
-                tbody: table.querySelector('tbody'),
-                tail: sheet.querySelector('.tail'),
-            };
-        }
-
-        function overflows() {
-            return current.content.scrollHeight > current.content.clientHeight + 1;
-        }
-
-        newSheet();
-
-        rows.forEach(function (row) {
-            var node = document.importNode(row, true);
-            current.tbody.appendChild(node);
-
-            if (overflows() && current.tbody.rows.length > 1) {
-                current.tbody.removeChild(node);
-                current.sheet.querySelector('.continued').textContent = 'Continued on next page…';
-                newSheet();
-                current.tbody.appendChild(node);
-            }
-        });
-
-        current.tail.innerHTML = totalsHtml;
-
-        if (overflows() && current.tbody.rows.length > 0) {
-            // Totals do not fit: carry the last few rows over with them so
-            // the last page never holds the totals alone.
-            current.tail.innerHTML = '';
-            var carried = [];
-            var carryCount = Math.min(3, current.tbody.rows.length - 1);
-
-            for (var i = 0; i < carryCount; i++) {
-                carried.unshift(current.tbody.removeChild(current.tbody.lastElementChild));
-            }
-
-            current.sheet.querySelector('.continued').textContent = 'Continued on next page…';
-            newSheet();
-            carried.forEach(function (node) { current.tbody.appendChild(node); });
-
-            if (carried.length === 0) {
-                current.table.style.display = 'none';
-            }
-
-            current.tail.innerHTML = totalsHtml;
-        }
-
-        sheets.forEach(function (sheet, index) {
-            sheet.querySelector('.page-no').textContent =
-                'Page ' + (index + 1) + ' of ' + sheets.length;
-        });
-    });
-
-    document.body.setAttribute('data-paginated', '1');
-})();`;
+/** "Page x of y" in the bottom margin (single invoice only, so numbering is per invoice). */
+const PAGE_NUMBER_STYLE = `
+    @page { @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #94a3b8; } }`;
 
 const BLANK_DATE =
     '<span style="display:inline-block;width:90px;border-bottom:1px solid #1e293b;">&nbsp;</span>';
@@ -181,7 +108,9 @@ function renderTotals(invoice: Invoice): string {
                <tr class="rule"><td class="label">Grand Total:</td><td style="font-size:16px;"><strong>${total}</strong></td></tr>`
             : `<tr><td class="label">Total Amount:</td><td style="font-size:16px;"><strong>${total}</strong></td></tr>`;
     const terms = invoice.show_terms
-        ? `<div class="note terms"><strong>Terms &amp; Conditions:</strong> ${INVOICE_TERMS_TEXT}</div>`
+        ? `<div class="terms"><strong>Terms &amp; Conditions:</strong>
+            <ol>${INVOICE_TERMS.map((term) => `<li>${term}</li>`).join('')}</ol>
+        </div>`
         : '';
 
     return `<div class="totals">
@@ -219,12 +148,11 @@ function renderHeader(invoice: Invoice): string {
 }
 
 /**
- * Source data for one invoice. The pagination script turns it into sheets.
+ * One invoice as a single table so the browser repeats header and footer.
  */
-function renderInvoiceSource(invoice: Invoice): string {
-    return `<template class="invoice-src">
-    <div class="src-header">${renderHeader(invoice)}</div>
-    <table class="src-table">
+function renderInvoice(invoice: Invoice, footer: string): string {
+    return `<section class="invoice">
+    <table class="items">
         <colgroup>
             <col style="width:26px;" />
             <col />
@@ -234,6 +162,7 @@ function renderInvoiceSource(invoice: Invoice): string {
             <col style="width:80px;" />
         </colgroup>
         <thead>
+            <tr class="frame"><td colspan="6">${renderHeader(invoice)}</td></tr>
             <tr>
                 <th style="text-align:center;">SL</th>
                 <th>Product / Item</th>
@@ -243,13 +172,19 @@ function renderInvoiceSource(invoice: Invoice): string {
                 <th style="text-align:right;">Amount</th>
             </tr>
         </thead>
+        <tfoot>
+            <tr class="frame"><td colspan="6"><div class="footer-space"></div></td></tr>
+        </tfoot>
         <tbody>${renderItemRows(invoice.items || [])}</tbody>
+        <tbody>
+            <tr class="frame"><td colspan="6">${renderTotals(invoice)}</td></tr>
+        </tbody>
     </table>
-    <div class="src-totals">${renderTotals(invoice)}</div>
-</template>`;
+    <div class="screen-footer">${footer}</div>
+</section>`;
 }
 
-/** Bank details and signature, repeated at the bottom of every sheet. */
+/** Bank details and signature, pinned to the bottom of every printed page. */
 function renderFooter(): string {
     const bankRows = [
         ['Bank Name:', 'BRAC BANK'],
@@ -265,7 +200,7 @@ function renderFooter(): string {
         )
         .join('');
 
-    return `<template id="footer-src">
+    return `<div class="sheet-footer">
     <table>
         <tr>
             <td style="width:55%;">
@@ -283,8 +218,8 @@ function renderFooter(): string {
             </td>
         </tr>
     </table>
-    <div class="generated"><span>Generated by M/S Noor Hotel and Restaurant</span><span class="page-no"></span></div>
-</template>`;
+    <div class="generated">Generated by M/S Noor Hotel and Restaurant</div>
+</div>`;
 }
 
 /**
@@ -295,20 +230,19 @@ export function renderInvoiceDocument(invoices: Invoice[]): string {
         invoices.length === 1
             ? `Invoice ${invoices[0].invoice_number}`
             : 'Invoice Batch Print';
+    const footer = renderFooter();
 
     return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8"/>
     <title>${title}</title>
-    <style>${PRINT_STYLES}
+    <style>${PRINT_STYLES}${invoices.length === 1 ? PAGE_NUMBER_STYLE : ''}
     </style>
 </head>
 <body>
-    ${renderFooter()}
-    ${invoices.map(renderInvoiceSource).join('')}
-    <div id="sheets"></div>
-    <script>${PAGINATE_SCRIPT}</script>
+    <div class="print-footer">${footer}</div>
+    ${invoices.map((invoice) => renderInvoice(invoice, footer)).join('')}
 </body>
 </html>`;
 }
